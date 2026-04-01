@@ -364,11 +364,14 @@
 
         <form method="POST" action="{{ url_for('salvar_ocorrencia_turno') }}">
           <div class="row">
-            <div class="field">
-              <label>ID da ocorrência</label>
-              <input type="text" value="Gerado automaticamente pelo sistema" readonly class="readonly-field">
+          <div class="field">
+            <label>ID da ocorrência</label>
+            <input type="text" value="#{{ proximo_id_previsto }}" readonly class="readonly-field">
+            <div class="small">
+              Prévia do próximo ID disponível. O número definitivo será confirmado ao salvar.
             </div>
           </div>
+        </div>
 
           <div style="height:12px"></div>
 
@@ -385,9 +388,10 @@
               <label>Site</label>
               <select name="site" required>
                 <option value="">Selecione</option>
-                <option value="SITE 1">SITE 1</option>
-                <option value="SITE 2">SITE 2</option>
-                <option value="SITE 3">SITE 3</option>
+                <option value="SITE 1">P&G</option>
+                <option value="SITE 2">Pacheco Trader Center</option>
+                <option value="SITE 3">Parque Ciudad</option>
+                <option value="SITE 3">Parque Ciudad</option>
               </select>
             </div>
           </div>
