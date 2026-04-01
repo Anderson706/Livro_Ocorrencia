@@ -196,6 +196,11 @@
       min-height:110px;
       resize:vertical;
     }
+    .readonly-field{
+      background:#f3f4f6 !important;
+      color:#6b7280;
+      font-weight:700;
+    }
     .actions{
       display:flex;
       gap:10px;
@@ -277,6 +282,18 @@
       background:linear-gradient(180deg,#fffdf5,#fff8db);
     }
     .inline-form{display:inline;}
+    .id-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:7px 12px;
+      background:#fff;
+      border:1px solid #f3d56c;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      color:#8a6200;
+    }
   </style>
 </head>
 <body>
@@ -346,6 +363,15 @@
         </div>
 
         <form method="POST" action="{{ url_for('salvar_ocorrencia_turno') }}">
+          <div class="row">
+            <div class="field">
+              <label>ID da ocorrência</label>
+              <input type="text" value="Gerado automaticamente pelo sistema" readonly class="readonly-field">
+            </div>
+          </div>
+
+          <div style="height:12px"></div>
+
           <div class="row">
             <div class="field">
               <label>Data</label>
@@ -476,6 +502,9 @@
 
         {% if ultima_ocorrencia %}
           <div class="card result-panel" style="padding:14px;">
+            <div style="margin-bottom:8px;">
+              <span class="id-chip">ID da ocorrência: #{{ ultima_ocorrencia.id }}</span>
+            </div>
             <div><strong>Data/Hora:</strong> {{ ultima_ocorrencia.data_hora_registro }}</div>
             <div><strong>Site:</strong> {{ ultima_ocorrencia.site }}</div>
             <div><strong>Turno:</strong> {{ ultima_ocorrencia.turno }}</div>
@@ -584,7 +613,7 @@
           <tbody>
             {% for r in ocorrencias %}
               <tr>
-                <td>{{ r.id }}</td>
+                <td><strong>#{{ r.id }}</strong></td>
                 <td>{{ r.data_hora_registro }}</td>
                 <td>{{ r.site }}</td>
                 <td>{{ r.turno }}</td>

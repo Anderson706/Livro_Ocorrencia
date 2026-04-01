@@ -4,116 +4,559 @@
   <meta charset="utf-8">
   <title>Dashboard Ocorrências</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <style>
-    body{margin:0;font-family:Arial, Helvetica, sans-serif;background:#f4f5f7;padding:30px;}
-    .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:22px;}
-    .btn{text-decoration:none;background:#d40511;color:#fff;padding:10px 14px;border-radius:10px;font-weight:800;}
-    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px;}
-    .card{background:#fff;border-radius:18px;padding:18px;box-shadow:0 10px 24px rgba(0,0,0,.08);border:1px solid #e5e7eb;}
-    .label{font-size:12px;text-transform:uppercase;color:#6b7280;font-weight:700;margin-bottom:8px;}
-    .value{font-size:30px;font-weight:900;color:#d40511;}
-    table{width:100%;border-collapse:collapse;background:#fff;border-radius:16px;overflow:hidden;}
-    th, td{padding:12px;border-bottom:1px solid #e5e7eb;text-align:left;}
-    th{background:#ffcc00;}
-    @media (max-width:900px){.grid{grid-template-columns:repeat(2,1fr);}}
-    @media (max-width:600px){.grid{grid-template-columns:1fr;}}
+    :root{
+      --dhl-yellow:#ffcc00;
+      --dhl-red:#d40511;
+      --dhl-red-dark:#b1030d;
+      --dhl-black:#1f1f1f;
+      --bg:#f4f5f7;
+      --card:#ffffff;
+      --line:#e6e9ee;
+      --text:#1f2937;
+      --muted:#6b7280;
+      --shadow:0 12px 28px rgba(15,23,42,.08);
+      --radius:20px;
+
+      --success-bg:#eaf8ef;
+      --success-text:#1d7a43;
+
+      --warn-bg:#fff7e0;
+      --warn-text:#9a6a00;
+
+      --danger-bg:#fdecec;
+      --danger-text:#b42318;
+
+      --neutral-bg:#eef2f6;
+      --neutral-text:#425466;
+    }
+
+    *{box-sizing:border-box}
+
+    body{
+      margin:0;
+      font-family:Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(255,204,0,.12), transparent 20%),
+        linear-gradient(180deg, #fafafa 0%, #f4f5f7 100%);
+      color:var(--text);
+      padding:0;
+    }
+
+    .topbar{
+      height:8px;
+      background:linear-gradient(
+        90deg,
+        var(--dhl-red) 0%,
+        var(--dhl-red) 22%,
+        var(--dhl-yellow) 22%,
+        var(--dhl-yellow) 100%
+      );
+      box-shadow:0 2px 8px rgba(0,0,0,.08);
+    }
+
+    .wrap{
+      width:min(1450px, calc(100vw - 32px));
+      margin:20px auto 28px;
+    }
+
+    .hero{
+      position:relative;
+      overflow:hidden;
+      background:linear-gradient(135deg, rgba(212,5,17,.98), rgba(145,0,10,.96));
+      color:#fff;
+      border-radius:24px;
+      padding:26px 28px;
+      box-shadow:var(--shadow);
+      margin-bottom:20px;
+    }
+
+    .hero::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(circle at 85% 18%, rgba(255,204,0,.28), transparent 16%),
+        radial-gradient(circle at 75% 85%, rgba(255,255,255,.08), transparent 18%);
+      pointer-events:none;
+    }
+
+    .hero-content{
+      position:relative;
+      z-index:1;
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:20px;
+      flex-wrap:wrap;
+    }
+
+    .hero-left h1{
+      margin:0 0 8px 0;
+      font-size:32px;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+
+    .hero-left p{
+      margin:0;
+      max-width:820px;
+      line-height:1.5;
+      font-size:14px;
+      opacity:.95;
+    }
+
+    .hero-tags{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .hero-tag{
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.18);
+      padding:10px 14px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.3px;
+      white-space:nowrap;
+    }
+
+    .btn{
+      text-decoration:none;
+      border:none;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      padding:11px 16px;
+      border-radius:14px;
+      font-weight:800;
+      transition:.18s ease;
+      box-shadow:0 8px 18px rgba(0,0,0,.10);
+    }
+
+    .btn:hover{
+      transform:translateY(-1px);
+    }
+
+    .btn-light{
+      background:#fff;
+      color:var(--dhl-red);
+    }
+
+    .btn-dark{
+      background:linear-gradient(180deg,#353b42,#20242a);
+      color:#fff;
+    }
+
+    .section{
+      margin-bottom:20px;
+    }
+
+    .section-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      margin-bottom:14px;
+      flex-wrap:wrap;
+    }
+
+    .section-title{
+      margin:0;
+      font-size:20px;
+      color:var(--dhl-black);
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+
+    .section-chip{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:999px;
+      padding:7px 12px;
+      background:#fff4cc;
+      color:#7a5a00;
+      border:1px solid #f1d56e;
+      font-size:12px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.3px;
+    }
+
+    .grid{
+      display:grid;
+      gap:16px;
+    }
+
+    .grid-4{
+      grid-template-columns:repeat(4, 1fr);
+    }
+
+    .grid-3{
+      grid-template-columns:repeat(3, 1fr);
+    }
+
+    @media (max-width:1100px){
+      .grid-4{ grid-template-columns:repeat(2, 1fr); }
+      .grid-3{ grid-template-columns:1fr; }
+    }
+
+    @media (max-width:700px){
+      .grid-4{ grid-template-columns:1fr; }
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:18px;
+    }
+
+    .kpi{
+      position:relative;
+      overflow:hidden;
+      min-height:130px;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      gap:8px;
+      background:linear-gradient(180deg,#fff,#fffdf7);
+    }
+
+    .kpi::after{
+      content:"";
+      position:absolute;
+      width:88px;
+      height:88px;
+      right:-22px;
+      top:-20px;
+      border-radius:50%;
+      background:rgba(255,204,0,.18);
+    }
+
+    .kpi .label{
+      position:relative;
+      z-index:1;
+      font-size:12px;
+      font-weight:800;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.6px;
+    }
+
+    .kpi .value{
+      position:relative;
+      z-index:1;
+      font-size:34px;
+      font-weight:900;
+      color:var(--dhl-red);
+      line-height:1;
+    }
+
+    .kpi .sub{
+      position:relative;
+      z-index:1;
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.4;
+    }
+
+    .panel-title{
+      margin:0 0 14px 0;
+      font-size:18px;
+      font-weight:900;
+      color:var(--dhl-black);
+    }
+
+    .table-wrap{
+      overflow:auto;
+      border:1px solid var(--line);
+      border-radius:16px;
+      background:#fff;
+    }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      min-width:520px;
+      background:#fff;
+    }
+
+    th, td{
+      padding:12px 14px;
+      border-bottom:1px solid #edf1f5;
+      text-align:left;
+      vertical-align:middle;
+      font-size:13px;
+    }
+
+    th{
+      background:linear-gradient(180deg,#fff8db,#ffefab);
+      color:#4b3c00;
+      font-weight:900;
+      white-space:nowrap;
+      position:sticky;
+      top:0;
+      z-index:1;
+    }
+
+    tbody tr:hover{
+      background:#fffdf7;
+    }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:7px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      border:1px solid transparent;
+      white-space:nowrap;
+    }
+
+    .badge-danger{
+      background:var(--danger-bg);
+      color:var(--danger-text);
+      border-color:#f3c7cc;
+    }
+
+    .badge-warn{
+      background:var(--warn-bg);
+      color:var(--warn-text);
+      border-color:#f0d38b;
+    }
+
+    .badge-ok{
+      background:var(--success-bg);
+      color:var(--success-text);
+      border-color:#c9eacb;
+    }
+
+    .badge-neutral{
+      background:var(--neutral-bg);
+      color:var(--neutral-text);
+      border-color:#d8e0e8;
+    }
+
+    .empty{
+      padding:18px;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    .table-note{
+      margin-top:10px;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .summary-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:16px;
+    }
+
+    @media (max-width:1100px){
+      .summary-grid{
+        grid-template-columns:1fr;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="top">
-    <h1>Dashboard de Ocorrências</h1>
-    <a href="{{ url_for('index') }}" class="btn">Voltar</a>
-  </div>
+  <div class="topbar"></div>
 
-  <div class="grid">
-    <div class="card">
-      <div class="label">Total</div>
-      <div class="value">{{ total }}</div>
-    </div>
-    <div class="card">
-      <div class="label">Em aberto</div>
-      <div class="value">{{ em_aberto }}</div>
-    </div>
-    <div class="card">
-      <div class="label">Em acompanhamento</div>
-      <div class="value">{{ acompanhamento }}</div>
-    </div>
-    <div class="card">
-      <div class="label">Finalizado</div>
-      <div class="value">{{ finalizado }}</div>
-    </div>
-  </div>
+  <div class="wrap">
 
-  <div class="card" style="margin-bottom:20px;">
-    <h3>Ocorrências por turno</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Turno</th>
-          <th>Quantidade</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for turno, qtd in por_turno %}
-        <tr>
-          <td>{{ turno }}</td>
-          <td>{{ qtd }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="2">Sem dados.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+    <div class="hero">
+      <div class="hero-content">
+        <div class="hero-left">
+          <h1>Dashboard de Ocorrências</h1>
+          <p>
+            Painel executivo para acompanhamento das ocorrências operacionais, com visão consolidada
+            dos registros, status de tratativa, criticidade por prioridade e distribuição por site e turno.
+          </p>
+        </div>
 
-  <div class="card" style="margin-bottom:20px;">
-    <h3>Ocorrências por prioridade</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Prioridade</th>
-          <th>Quantidade</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for prioridade, qtd in por_prioridade %}
-        <tr>
-          <td>{{ prioridade }}</td>
-          <td>{{ qtd }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="2">Sem dados.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+        <div class="hero-tags">
+          <span class="hero-tag">Monitoramento Operacional</span>
+          <span class="hero-tag">Indicadores Gerenciais</span>
+          <a href="{{ url_for('index') }}" class="btn btn-light">Voltar</a>
+        </div>
+      </div>
+    </div>
 
-  <div class="card">
-    <h3>Ocorrências por site</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Site</th>
-          <th>Quantidade</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for site, qtd in por_site %}
-        <tr>
-          <td>{{ site }}</td>
-          <td>{{ qtd }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="2">Sem dados.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="section">
+      <div class="section-head">
+        <h2 class="section-title">Indicadores principais</h2>
+        <span class="section-chip">Visão Geral</span>
+      </div>
+
+      <div class="grid grid-4">
+        <div class="card kpi">
+          <div class="label">Total de ocorrências</div>
+          <div class="value">{{ total }}</div>
+          <div class="sub">Volume total registrado no sistema</div>
+        </div>
+
+        <div class="card kpi">
+          <div class="label">Em aberto</div>
+          <div class="value">{{ em_aberto }}</div>
+          <div class="sub">Ocorrências pendentes de tratativa</div>
+        </div>
+
+        <div class="card kpi">
+          <div class="label">Em acompanhamento</div>
+          <div class="value">{{ acompanhamento }}</div>
+          <div class="sub">Itens em monitoramento operacional</div>
+        </div>
+
+        <div class="card kpi">
+          <div class="label">Finalizadas</div>
+          <div class="value">{{ finalizado }}</div>
+          <div class="sub">Ocorrências concluídas no período</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <h2 class="section-title">Distribuições gerenciais</h2>
+        <span class="section-chip">Análise Consolidada</span>
+      </div>
+
+      <div class="summary-grid">
+
+        <div class="card">
+          <h3 class="panel-title">Ocorrências por turno</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Turno</th>
+                  <th>Quantidade</th>
+                  <th>Classificação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for turno, qtd in por_turno %}
+                <tr>
+                  <td><strong>{{ turno }}</strong></td>
+                  <td>{{ qtd }}</td>
+                  <td>
+                    {% if qtd >= 20 %}
+                      <span class="badge badge-danger">Alta demanda</span>
+                    {% elif qtd >= 10 %}
+                      <span class="badge badge-warn">Atenção</span>
+                    {% else %}
+                      <span class="badge badge-ok">Controlado</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="3" class="empty">Sem dados disponíveis.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="table-note">
+            Distribuição dos registros por faixa operacional de turno.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="panel-title">Ocorrências por prioridade</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Prioridade</th>
+                  <th>Quantidade</th>
+                  <th>Status analítico</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for prioridade, qtd in por_prioridade %}
+                <tr>
+                  <td><strong>{{ prioridade }}</strong></td>
+                  <td>{{ qtd }}</td>
+                  <td>
+                    {% if prioridade in ['CRITICA', 'CRÍTICA', 'ALTA'] %}
+                      <span class="badge badge-danger">Criticidade elevada</span>
+                    {% elif prioridade in ['MEDIA', 'MÉDIA'] %}
+                      <span class="badge badge-warn">Monitorar</span>
+                    {% else %}
+                      <span class="badge badge-ok">Baixo impacto</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="3" class="empty">Sem dados disponíveis.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="table-note">
+            Nível de criticidade dos registros lançados no sistema.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="panel-title">Ocorrências por site</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Site</th>
+                  <th>Quantidade</th>
+                  <th>Leitura gerencial</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for site, qtd in por_site %}
+                <tr>
+                  <td><strong>{{ site }}</strong></td>
+                  <td>{{ qtd }}</td>
+                  <td>
+                    {% if qtd >= 20 %}
+                      <span class="badge badge-danger">Maior concentração</span>
+                    {% elif qtd >= 10 %}
+                      <span class="badge badge-warn">Ponto de atenção</span>
+                    {% else %}
+                      <span class="badge badge-neutral">Volume moderado</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="3" class="empty">Sem dados disponíveis.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="table-note">
+            Comparativo entre unidades com base no volume de ocorrências.
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 </body>
 </html>
