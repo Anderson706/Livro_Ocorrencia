@@ -511,6 +511,13 @@
           <div style="margin-bottom:8px;">
             <span class="id-chip">ID da ocorrência: #{{ ultima_ocorrencia.id }}</span>
           </div>
+
+          <div style="margin-bottom:12px;">
+            <a href="{{ url_for('export_ocorrencia_individual_pdf', ocorrencia_id=ultima_ocorrencia.id) }}" class="btn btn-dark">
+              Exportar esta ocorrência em PDF
+            </a>
+          </div>
+
           <div><strong>Data/Hora:</strong> {{ ultima_ocorrencia.data_hora_registro }}</div>
           <div><strong>Site:</strong> {{ ultima_ocorrencia.site }}</div>
           <div><strong>Turno:</strong> {{ ultima_ocorrencia.turno }}</div>

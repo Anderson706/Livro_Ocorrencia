@@ -2,7 +2,7 @@ import os
 from io import BytesIO
 from datetime import datetime, date
 from functools import wraps
-
+from reportlab.platypus import Image
 from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, session, send_file
@@ -682,6 +682,183 @@ def export_ocorrencias_excel():
         as_attachment=True,
         download_name=nome_arquivo,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
+@app.route("/ocorrencias/<int:ocorrencia_id>/pdf")
+@login_required
+def export_ocorrencia_individual_pdf(ocorrencia_id):
+    ocorrencia = OcorrenciaTurno.query.get_or_404(ocorrencia_id)
+
+    output = BytesIO()
+    doc = SimpleDocTemplate(
+        output,
+        pagesize=A4,
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+        topMargin=15 * mm,
+        bottomMargin=15 * mm
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "TituloDHL",
+        parent=styles["Heading1"],
+        fontName="Helvetica-Bold",
+        fontSize=18,
+        textColor=colors.HexColor("#D40511"),
+        spaceAfter=6,
+        leading=22,
+    )
+
+    subtitle_style = ParagraphStyle(
+        "SubTituloDHL",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9,
+        textColor=colors.HexColor("#555555"),
+        spaceAfter=10,
+    )
+
+    label_style = ParagraphStyle(
+        "Label",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        textColor=colors.HexColor("#111111"),
+        spaceAfter=2,
+    )
+
+    text_style = ParagraphStyle(
+        "Texto",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=10,
+        leading=14,
+        spaceAfter=8,
+        textColor=colors.HexColor("#333333"),
+    )
+
+    box_style = TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF9E6")),
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#E0C24D")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#F0E0A0")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ])
+
+    elementos = []
+
+    # Logo
+    logo_path = os.path.join(app.static_folder, "logo.png")
+    if os.path.exists(logo_path):
+        logo = Image(logo_path, width=40 * mm, height=15 * mm)
+        elementos.append(logo)
+        elementos.append(Spacer(1, 5))
+
+    elementos.append(Paragraph("DHL SECURITY - OCORRÊNCIA INDIVIDUAL", title_style))
+    elementos.append(Paragraph("Relatório detalhado da ocorrência registrada", subtitle_style))
+
+    dados_principais = [
+        ["ID da ocorrência", f"#{ocorrencia.id}"],
+        ["Data da ocorrência", ocorrencia.data_ocorrencia.strftime("%d/%m/%Y") if ocorrencia.data_ocorrencia else "-"],
+        ["Data/Hora do registro", ocorrencia.data_hora_registro.strftime("%d/%m/%Y %H:%M") if ocorrencia.data_hora_registro else "-"],
+        ["Site", ocorrencia.site or "-"],
+        ["Turno", ocorrencia.turno or "-"],
+        ["Setor", ocorrencia.setor or "-"],
+        ["Tipo de ocorrência", ocorrencia.tipo_ocorrencia or "-"],
+        ["Prioridade", ocorrencia.prioridade or "-"],
+        ["Status", ocorrencia.status or "-"],
+        ["Responsável saída", ocorrencia.responsavel_saida or "-"],
+        ["Responsável entrada", ocorrencia.responsavel_entrada or "-"],
+        ["Referência", ocorrencia.referencia or "-"],
+        ["Criado por", ocorrencia.criado_por or "-"],
+    ]
+
+    tabela_info = Table(dados_principais, colWidths=[50 * mm, 120 * mm])
+    tabela_info.setStyle(box_style)
+    elementos.append(tabela_info)
+    elementos.append(Spacer(1, 10))
+
+    elementos.append(Paragraph("Descrição:", label_style))
+    elementos.append(Paragraph(ocorrencia.descricao or "-", text_style))
+
+    elementos.append(Paragraph("Ações tomadas:", label_style))
+    elementos.append(Paragraph(ocorrencia.acoes_tomadas or "-", text_style))
+
+    elementos.append(Paragraph("Pendências:", label_style))
+    elementos.append(Paragraph(ocorrencia.pendencias or "-", text_style))
+
+    elementos.append(Spacer(1, 8))
+    elementos.append(
+        Paragraph(
+            f"Documento gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+            subtitle_style
+        )
+    )
+
+    doc.build(elementos)
+
+    output.seek(0)
+    nome_arquivo = f"ocorrencia_{ocorrencia.id}.pdf"
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=nome_arquivo,
+        mimetype="application/pdf"
+    )
+
+    elementos = []
+    elementos.append(Paragraph("DHL SECURITY - OCORRÊNCIA INDIVIDUAL", title_style))
+    elementos.append(Spacer(1, 6))
+
+    dados = [
+        ("ID da ocorrência", f"#{ocorrencia.id}"),
+        ("Data da ocorrência", ocorrencia.data_ocorrencia.strftime("%d/%m/%Y") if ocorrencia.data_ocorrencia else "-"),
+        ("Data/Hora do registro", ocorrencia.data_hora_registro.strftime("%d/%m/%Y %H:%M") if ocorrencia.data_hora_registro else "-"),
+        ("Site", ocorrencia.site or "-"),
+        ("Turno", ocorrencia.turno or "-"),
+        ("Setor", ocorrencia.setor or "-"),
+        ("Tipo de ocorrência", ocorrencia.tipo_ocorrencia or "-"),
+        ("Prioridade", ocorrencia.prioridade or "-"),
+        ("Status", ocorrencia.status or "-"),
+        ("Responsável saída", ocorrencia.responsavel_saida or "-"),
+        ("Responsável entrada", ocorrencia.responsavel_entrada or "-"),
+        ("Referência", ocorrencia.referencia or "-"),
+        ("Criado por", ocorrencia.criado_por or "-"),
+        ("Criado em", ocorrencia.created_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.created_at else "-"),
+        ("Atualizado em", ocorrencia.updated_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.updated_at else "-"),
+    ]
+
+    for label, valor in dados:
+        elementos.append(Paragraph(f"{label}:", label_style))
+        elementos.append(Paragraph(str(valor), text_style))
+
+    elementos.append(Spacer(1, 4))
+    elementos.append(Paragraph("Descrição:", label_style))
+    elementos.append(Paragraph(ocorrencia.descricao or "-", text_style))
+
+    elementos.append(Paragraph("Ações tomadas:", label_style))
+    elementos.append(Paragraph(ocorrencia.acoes_tomadas or "-", text_style))
+
+    elementos.append(Paragraph("Pendências:", label_style))
+    elementos.append(Paragraph(ocorrencia.pendencias or "-", text_style))
+
+    doc.build(elementos)
+
+    output.seek(0)
+    nome_arquivo = f"ocorrencia_{ocorrencia.id}.pdf"
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=nome_arquivo,
+        mimetype="application/pdf"
     )
 
 
