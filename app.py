@@ -775,7 +775,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         ["Status", ocorrencia.status or "-"],
         ["Responsável saída", ocorrencia.responsavel_saida or "-"],
         ["Responsável entrada", ocorrencia.responsavel_entrada or "-"],
-        ["Referência", ocorrencia.referencia or "-"],
+        
         ["Criado por", ocorrencia.criado_por or "-"],
     ]
 
@@ -829,7 +829,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         ("Status", ocorrencia.status or "-"),
         ("Responsável saída", ocorrencia.responsavel_saida or "-"),
         ("Responsável entrada", ocorrencia.responsavel_entrada or "-"),
-        ("Referência", ocorrencia.referencia or "-"),
+
         ("Criado por", ocorrencia.criado_por or "-"),
         ("Criado em", ocorrencia.created_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.created_at else "-"),
         ("Atualizado em", ocorrencia.updated_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.updated_at else "-"),

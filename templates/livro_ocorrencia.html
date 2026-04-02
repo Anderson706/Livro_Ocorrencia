@@ -413,7 +413,7 @@
           </div>
           <div class="field">
             <label>Setor / Área</label>
-            <input type="text" name="setor" placeholder="Ex.: CFTV / SORTER 1 / DOCAS" required>
+            <input type="text" name="setor" placeholder="Ex.: PORTARIA" required>
           </div>
           <div class="field">
             <label>Tipo de ocorrência</label>
@@ -452,10 +452,7 @@
               <option value="FINALIZADO">FINALIZADO</option>
             </select>
           </div>
-          <div class="field">
-            <label>Referência / Protocolo</label>
-            <input type="text" name="referencia" placeholder="Ex.: OC-2026-0001">
-          </div>
+
         </div>
 
         <div style="height:12px"></div>
@@ -527,7 +524,7 @@
           <div><strong>Status:</strong> {{ ultima_ocorrencia.status }}</div>
           <div><strong>Resp. saída:</strong> {{ ultima_ocorrencia.responsavel_saida }}</div>
           <div><strong>Resp. entrada:</strong> {{ ultima_ocorrencia.responsavel_entrada }}</div>
-          <div><strong>Referência:</strong> {{ ultima_ocorrencia.referencia or '-' }}</div>
+
 
           <div style="margin-top:10px;"><strong>Descrição:</strong></div>
           <div>{{ ultima_ocorrencia.descricao }}</div>
@@ -618,7 +615,7 @@
             <th>Status</th>
             <th>Resp. saída</th>
             <th>Resp. entrada</th>
-            <th>Referência</th>
+
             <th>Descrição</th>
             <th>Ações</th>
           </tr>
