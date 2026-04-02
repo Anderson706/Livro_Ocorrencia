@@ -1,143 +1,173 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8">
-  <title>Criar Usuário | Livro de Ocorrência</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+{% extends "base.html" %}
 
-  <style>
-    :root{
-      --dhl-yellow:#ffcc00;
-      --dhl-red:#d40511;
-      --line:#e5e7eb;
-      --text:#1f2937;
-      --muted:#6b7280;
-      --bg:#f4f5f7;
-      --card:#ffffff;
-      --shadow:0 12px 30px rgba(0,0,0,.12);
-    }
+{% block title %}Criar Usuário | Livro de Ocorrência{% endblock %}
 
-    *{ box-sizing:border-box; }
+{% block body %}
 
-    body{
-      margin:0;
-      font-family:Arial, Helvetica, sans-serif;
-      background:var(--bg);
-      min-height:100vh;
-      padding:30px;
-    }
+<style>
+  :root{
+    --dhl-yellow:#ffcc00;
+    --dhl-red:#d40511;
+    --line:#e5e7eb;
+    --text:#1f2937;
+    --muted:#6b7280;
+    --bg:#f4f5f7;
+    --card:#ffffff;
+    --shadow:0 12px 30px rgba(0,0,0,.12);
+  }
 
-    /* 🔥 CONTAINER FULL */
-    .container{
-      width:100%;
-      max-width:1400px;
-      margin:0 auto;
-    }
+  *{ box-sizing:border-box; }
 
-    /* 🔥 CARD FULL */
-    .card{
-      width:100%;
-      background:var(--card);
-      border-radius:18px;
-      padding:30px;
-      box-shadow:var(--shadow);
-      border:1px solid var(--line);
-    }
+  .page-wrap{
+    width:100%;
+    max-width:1400px;
+    margin:0 auto;
+  }
 
-    .topo{
-      margin-bottom:25px;
-    }
+  .card{
+    width:100%;
+    background:var(--card);
+    border-radius:18px;
+    padding:30px;
+    box-shadow:var(--shadow);
+    border:1px solid var(--line);
+  }
 
-    .titulo{
-      margin:0;
-      color:var(--dhl-red);
-      font-size:34px;
-      font-weight:800;
-    }
+  .topo{
+    margin-bottom:25px;
+  }
 
-    .subtitulo{
-      margin-top:8px;
-      color:var(--muted);
-    }
+  .titulo{
+    margin:0;
+    color:var(--dhl-red);
+    font-size:34px;
+    font-weight:800;
+  }
 
-    .flash{
-      margin-bottom:14px;
-      padding:12px;
-      border-radius:10px;
-      background:#fff4db;
-      color:#9a6700;
-      font-weight:700;
-    }
+  .subtitulo{
+    margin-top:8px;
+    color:var(--muted);
+  }
 
-    label{
-      font-weight:700;
-      margin-bottom:6px;
-      display:block;
-    }
+  .flash{
+    margin-bottom:14px;
+    padding:12px;
+    border-radius:10px;
+    background:#fff4db;
+    color:#9a6700;
+    font-weight:700;
+    border:1px solid #f3df8a;
+  }
 
-    input, select{
-      width:100%;
-      padding:12px;
-      border-radius:10px;
-      border:1px solid #ccc;
-      margin-bottom:18px;
-    }
+  .flash.success{
+    background:#ecfdf3;
+    color:#166534;
+    border-color:#bbf7d0;
+  }
 
-    /* 🔥 GRID (2 COLUNAS) */
+  .flash.danger{
+    background:#fef2f2;
+    color:#991b1b;
+    border-color:#fecaca;
+  }
+
+  .flash.warning{
+    background:#fff8db;
+    color:#9a6700;
+    border-color:#f3df8a;
+  }
+
+  label{
+    font-weight:700;
+    margin-bottom:6px;
+    display:block;
+    color:var(--text);
+  }
+
+  input, select{
+    width:100%;
+    padding:12px;
+    border-radius:10px;
+    border:1px solid #ccc;
+    margin-bottom:18px;
+    font-size:14px;
+    outline:none;
+    transition:.18s ease;
+    background:#fff;
+  }
+
+  input:focus, select:focus{
+    border-color:var(--dhl-red);
+    box-shadow:0 0 0 3px rgba(212,5,17,.08);
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+  }
+
+  .full{
+    grid-column:1 / -1;
+  }
+
+  .actions{
+    margin-top:20px;
+    display:flex;
+    gap:15px;
+    flex-wrap:wrap;
+  }
+
+  .btn{
+    padding:14px;
+    border:none;
+    border-radius:12px;
+    font-weight:800;
+    cursor:pointer;
+    flex:1;
+    text-decoration:none;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:48px;
+  }
+
+  .btn-primary{
+    background:var(--dhl-yellow);
+    color:#1f1f1f;
+  }
+
+  .btn-secondary{
+    background:#111;
+    color:#fff;
+  }
+
+  .info-box{
+    margin-bottom:20px;
+    padding:12px;
+    border-radius:10px;
+    background:#fff8db;
+    border:1px solid #f3df8a;
+    font-size:13px;
+    color:#6b5a00;
+  }
+
+  @media (max-width: 900px){
     .grid{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:20px;
-    }
-
-    .full{
-      grid-column:1 / -1;
+      grid-template-columns:1fr;
     }
 
     .actions{
-      margin-top:20px;
-      display:flex;
-      gap:15px;
+      flex-direction:column;
     }
 
     .btn{
-      padding:14px;
-      border:none;
-      border-radius:12px;
-      font-weight:800;
-      cursor:pointer;
-      flex:1;
+      width:100%;
     }
+  }
+</style>
 
-    .btn-primary{
-      background:var(--dhl-yellow);
-    }
-
-    .btn-secondary{
-      background:#111;
-      color:#fff;
-    }
-
-    .info-box{
-      margin-bottom:20px;
-      padding:12px;
-      border-radius:10px;
-      background:#fff8db;
-      border:1px solid #f3df8a;
-      font-size:13px;
-    }
-
-    @media (max-width: 900px){
-      .grid{
-        grid-template-columns:1fr;
-      }
-    }
-  </style>
-</head>
-
-<body>
-
-<div class="container">
+<div class="page-wrap">
   <div class="card">
 
     <div class="topo">
@@ -150,7 +180,7 @@
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
-          <div class="flash">{{ message }}</div>
+          <div class="flash {{ category }}">{{ message }}</div>
         {% endfor %}
       {% endif %}
     {% endwith %}
@@ -170,34 +200,32 @@
     {% endif %}
 
     <form method="POST">
-
       <div class="grid">
 
         <div>
-          <label>Nome</label>
-          <input type="text" name="nome" required>
+          <label for="nome">Nome</label>
+          <input type="text" id="nome" name="nome" required>
         </div>
 
         <div>
-          <label>E-mail</label>
-          <input type="email" name="email" required>
+          <label for="email">E-mail</label>
+          <input type="email" id="email" name="email" required>
         </div>
 
         <div>
-          <label>Senha</label>
-          <input type="password" name="senha" required>
+          <label for="senha">Senha</label>
+          <input type="password" id="senha" name="senha" required>
         </div>
 
         <div>
-          <label>Site</label>
-          <input type="text" name="site">
+          <label for="site">Site</label>
+          <input type="text" id="site" name="site">
         </div>
 
         <div class="full">
-          <label>Perfil</label>
-          <select name="role">
+          <label for="role">Perfil</label>
+          <select id="role" name="role">
             <option value="USER">Usuário</option>
-
             {% if permitir_admin_publico or usuario_logado_admin %}
               <option value="ADMIN">Administrador</option>
             {% endif %}
@@ -207,14 +235,12 @@
       </div>
 
       <div class="actions">
-        <button class="btn btn-primary">Cadastrar</button>
+        <button type="submit" class="btn btn-primary">Cadastrar</button>
         <a href="{{ url_for('login') }}" class="btn btn-secondary">Voltar</a>
       </div>
-
     </form>
 
   </div>
 </div>
 
-</body>
-</html>
+{% endblock %}
