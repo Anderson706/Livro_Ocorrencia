@@ -2,7 +2,7 @@ import os
 from io import BytesIO
 from datetime import datetime, date
 from functools import wraps
-from reportlab.platypus import Image
+
 from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, session, send_file
@@ -20,7 +20,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    Image, SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 )
 
 
@@ -78,7 +78,6 @@ class OcorrenciaTurno(db.Model):
     pendencias = db.Column(db.Text, nullable=True)
 
     status = db.Column(db.String(40), nullable=False)
-    referencia = db.Column(db.String(80), nullable=True)
 
     criado_por = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
@@ -100,7 +99,6 @@ class OcorrenciaTurno(db.Model):
             "acoes_tomadas": self.acoes_tomadas or "",
             "pendencias": self.pendencias or "",
             "status": self.status,
-            "referencia": self.referencia or "",
             "criado_por": self.criado_por or "",
         }
 
@@ -174,7 +172,10 @@ def get_filtros_ocorrencias():
     if site:
         query = query.filter(OcorrenciaTurno.site == site)
 
-    query = query.order_by(OcorrenciaTurno.data_hora_registro.desc(), OcorrenciaTurno.id.desc())
+    query = query.order_by(
+        OcorrenciaTurno.data_hora_registro.desc(),
+        OcorrenciaTurno.id.desc()
+    )
 
     filtros = {
         "data_inicial": data_inicial,
@@ -260,6 +261,26 @@ def logout():
     session.clear()
     flash("Sessão encerrada com sucesso.", "success")
     return redirect(url_for("login"))
+
+
+# =========================
+# FECHAR OCORRÊNCIA
+# =========================
+@app.route("/ocorrencias/<int:ocorrencia_id>/fechar", methods=["POST"])
+@login_required
+def fechar_ocorrencia(ocorrencia_id):
+    ocorrencia = OcorrenciaTurno.query.get_or_404(ocorrencia_id)
+
+    try:
+        ocorrencia.status = "FINALIZADO"
+        ocorrencia.updated_at = datetime.now()
+        db.session.commit()
+        flash("Ocorrência finalizada com sucesso.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao finalizar ocorrência: {e}", "danger")
+
+    return redirect(url_for("index"))
 
 
 # =========================
@@ -468,7 +489,6 @@ def salvar_ocorrencia_turno():
         acoes_tomadas = (request.form.get("acoes_tomadas") or "").strip()
         pendencias = (request.form.get("pendencias") or "").strip()
         status = (request.form.get("status") or "").strip().upper()
-        referencia = (request.form.get("referencia") or "").strip()
 
         if not all([
             data_ocorrencia, data_hora_registro, site, turno, setor,
@@ -492,7 +512,6 @@ def salvar_ocorrencia_turno():
             acoes_tomadas=acoes_tomadas or None,
             pendencias=pendencias or None,
             status=status,
-            referencia=referencia or None,
             criado_por=session.get("username", "Usuário")
         )
 
@@ -528,7 +547,6 @@ def editar_ocorrencia(ocorrencia_id):
             ocorrencia.acoes_tomadas = (request.form.get("acoes_tomadas") or "").strip() or None
             ocorrencia.pendencias = (request.form.get("pendencias") or "").strip() or None
             ocorrencia.status = (request.form.get("status") or "").strip().upper()
-            ocorrencia.referencia = (request.form.get("referencia") or "").strip() or None
             ocorrencia.updated_at = datetime.now()
 
             if not all([
@@ -625,7 +643,7 @@ def export_ocorrencias_excel():
     headers = [
         "ID", "Data da Ocorrência", "Data/Hora Registro", "Site", "Turno", "Setor",
         "Tipo de Ocorrência", "Prioridade", "Responsável Saída", "Responsável Entrada",
-        "Descrição", "Ações Tomadas", "Pendências", "Status", "Referência",
+        "Descrição", "Ações Tomadas", "Pendências", "Status",
         "Criado por", "Criado em", "Atualizado em"
     ]
     ws.append(headers)
@@ -655,7 +673,6 @@ def export_ocorrencias_excel():
             r.acoes_tomadas or "",
             r.pendencias or "",
             r.status,
-            r.referencia or "",
             r.criado_por or "",
             r.created_at.strftime("%d/%m/%Y %H:%M") if r.created_at else "",
             r.updated_at.strftime("%d/%m/%Y %H:%M") if r.updated_at else "",
@@ -741,7 +758,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
     )
 
     box_style = TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF9E6")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
         ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#E0C24D")),
         ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#F0E0A0")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -753,7 +770,6 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
 
     elementos = []
 
-    # Logo
     logo_path = os.path.join(app.static_folder, "logo.png")
     if os.path.exists(logo_path):
         logo = Image(logo_path, width=40 * mm, height=15 * mm)
@@ -775,8 +791,9 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         ["Status", ocorrencia.status or "-"],
         ["Responsável saída", ocorrencia.responsavel_saida or "-"],
         ["Responsável entrada", ocorrencia.responsavel_entrada or "-"],
-
         ["Criado por", ocorrencia.criado_por or "-"],
+        ["Criado em", ocorrencia.created_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.created_at else "-"],
+        ["Atualizado em", ocorrencia.updated_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.updated_at else "-"],
     ]
 
     tabela_info = Table(dados_principais, colWidths=[50 * mm, 120 * mm])
@@ -800,54 +817,6 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
             subtitle_style
         )
     )
-
-    doc.build(elementos)
-
-    output.seek(0)
-    nome_arquivo = f"ocorrencia_{ocorrencia.id}.pdf"
-
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name=nome_arquivo,
-        mimetype="application/pdf"
-    )
-
-    elementos = []
-    elementos.append(Paragraph("DHL SECURITY - OCORRÊNCIA INDIVIDUAL", title_style))
-    elementos.append(Spacer(1, 6))
-
-    dados = [
-        ("ID da ocorrência", f"#{ocorrencia.id}"),
-        ("Data da ocorrência", ocorrencia.data_ocorrencia.strftime("%d/%m/%Y") if ocorrencia.data_ocorrencia else "-"),
-        ("Data/Hora do registro", ocorrencia.data_hora_registro.strftime("%d/%m/%Y %H:%M") if ocorrencia.data_hora_registro else "-"),
-        ("Site", ocorrencia.site or "-"),
-        ("Turno", ocorrencia.turno or "-"),
-        ("Setor", ocorrencia.setor or "-"),
-        ("Tipo de ocorrência", ocorrencia.tipo_ocorrencia or "-"),
-        ("Prioridade", ocorrencia.prioridade or "-"),
-        ("Status", ocorrencia.status or "-"),
-        ("Responsável saída", ocorrencia.responsavel_saida or "-"),
-        ("Responsável entrada", ocorrencia.responsavel_entrada or "-"),
-
-        ("Criado por", ocorrencia.criado_por or "-"),
-        ("Criado em", ocorrencia.created_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.created_at else "-"),
-        ("Atualizado em", ocorrencia.updated_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.updated_at else "-"),
-    ]
-
-    for label, valor in dados:
-        elementos.append(Paragraph(f"{label}:", label_style))
-        elementos.append(Paragraph(str(valor), text_style))
-
-    elementos.append(Spacer(1, 4))
-    elementos.append(Paragraph("Descrição:", label_style))
-    elementos.append(Paragraph(ocorrencia.descricao or "-", text_style))
-
-    elementos.append(Paragraph("Ações tomadas:", label_style))
-    elementos.append(Paragraph(ocorrencia.acoes_tomadas or "-", text_style))
-
-    elementos.append(Paragraph("Pendências:", label_style))
-    elementos.append(Paragraph(ocorrencia.pendencias or "-", text_style))
 
     doc.build(elementos)
 
@@ -910,8 +879,8 @@ def export_ocorrencias_pdf():
     elementos.append(Spacer(1, 6))
 
     data = [[
-        "ID", "Data/Hora", "Site", "Turno", "Setor", "Tipo", "Prioridade",
-        "Status", "Resp. Saída", "Resp. Entrada", "Referência"
+        "ID", "Data/Hora", "Site", "Turno", "Setor", "Tipo",
+        "Prioridade", "Status", "Resp. Saída", "Resp. Entrada"
     ]]
 
     for r in rows:
@@ -926,7 +895,6 @@ def export_ocorrencias_pdf():
             r.status,
             r.responsavel_saida,
             r.responsavel_entrada,
-            r.referencia or "-"
         ])
 
     tabela = Table(data, repeatRows=1)
@@ -949,7 +917,12 @@ def export_ocorrencias_pdf():
 
     output.seek(0)
     nome_arquivo = f"livro_ocorrencias_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    return send_file(output, as_attachment=True, download_name=nome_arquivo, mimetype="application/pdf")
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=nome_arquivo,
+        mimetype="application/pdf"
+    )
 
 
 # =========================
@@ -965,7 +938,7 @@ def criar_banco():
             nome="Administrador",
             email="admin@dhl.com",
             role="ADMIN",
-            site="SITE 1",
+            site="PG",
             is_active=True
         )
         admin.set_password("123456")
@@ -985,7 +958,7 @@ if __name__ == "__main__":
                 nome="Administrador",
                 email="admin@dhl.com",
                 role="ADMIN",
-                site="SITE 1",
+                site="PG",
                 is_active=True
             )
             admin.set_password("123456")
