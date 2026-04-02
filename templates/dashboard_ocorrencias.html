@@ -177,10 +177,6 @@
     grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
   }
 
-  .grid-3{
-    grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));
-  }
-
   .grid-2{
     grid-template-columns:repeat(auto-fit, minmax(520px, 1fr));
     justify-content:center;
@@ -193,7 +189,6 @@
 
   @media (max-width:700px){
     .grid-4,
-    .grid-3,
     .grid-2{
       grid-template-columns:1fr;
     }
@@ -271,7 +266,7 @@
   }
 
   .chart-card{
-    min-height:520px;
+    min-height:560px;
     max-width:860px;
     width:100%;
     margin:0 auto;
@@ -283,10 +278,15 @@
   .chart-wrap{
     position:relative;
     width:100%;
-    flex:1;
-    min-height:400px;
-    max-height:400px;
+    height:420px;
+    min-height:420px;
+    max-height:420px;
     margin:0 auto;
+  }
+
+  .chart-wrap canvas{
+    width:100% !important;
+    height:100% !important;
   }
 
   .chart-note{
@@ -497,7 +497,6 @@
     </div>
 
     <div class="summary-grid">
-
       <div class="card">
         <h3 class="panel-title">Ocorrências por turno</h3>
         <div class="table-wrap">
@@ -614,14 +613,16 @@
           Comparativo entre unidades com base no volume de ocorrências.
         </div>
       </div>
-
     </div>
   </div>
 
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 <script>
+  Chart.register(ChartDataLabels);
+
   const turnoLabels = [
     {% for turno, qtd in por_turno %}
       "{{ turno }}"{% if not loop.last %},{% endif %}
@@ -658,26 +659,109 @@
     {% endfor %}
   ];
 
-  const commonOptions = {
+  const dhlLegend = {
+    position: 'bottom',
+    align: 'center',
+    labels: {
+      usePointStyle: true,
+      pointStyle: 'circle',
+      boxWidth: 10,
+      boxHeight: 10,
+      padding: 18,
+      color: '#1f2937',
+      font: {
+        size: 12,
+        weight: '700'
+      }
+    }
+  };
+
+  const datalabelBar = {
+    anchor: 'end',
+    align: 'top',
+    offset: 4,
+    color: '#1f2937',
+    font: {
+      weight: '700',
+      size: 11
+    },
+    formatter: (value) => value
+  };
+
+  const datalabelPie = {
+    color: '#ffffff',
+    font: {
+      weight: '800',
+      size: 11
+    },
+    formatter: (value) => value > 0 ? value : ''
+  };
+
+  const commonBarOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: 20,
+        right: 10,
+        bottom: 10,
+        left: 10
+      }
+    },
     plugins: {
-      legend: {
-        labels: {
-          font: { size: 12, weight: '700' }
-        }
-      },
+      legend: dhlLegend,
       tooltip: {
         backgroundColor: '#1f1f1f',
         titleFont: { weight: 'bold' },
-        bodyFont: { size: 12 }
-      }
+        bodyFont: { size: 12 },
+        padding: 10
+      },
+      datalabels: datalabelBar
     },
     scales: {
+      x: {
+        ticks: {
+          color: '#425466',
+          font: {
+            size: 11,
+            weight: '700'
+          }
+        },
+        grid: {
+          display: false
+        }
+      },
       y: {
         beginAtZero: true,
-        ticks: { precision: 0 }
+        ticks: {
+          precision: 0,
+          color: '#425466',
+          font: {
+            size: 11
+          }
+        },
+        grid: {
+          color: 'rgba(31,41,55,.08)'
+        }
       }
+    }
+  };
+
+  const commonPieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: 16
+    },
+    plugins: {
+      legend: dhlLegend,
+      tooltip: {
+        backgroundColor: '#1f1f1f',
+        titleFont: { weight: 'bold' },
+        bodyFont: { size: 12 },
+        padding: 10
+      },
+      datalabels: datalabelPie
     }
   };
 
@@ -689,20 +773,13 @@
         data: [{{ em_aberto }}, {{ acompanhamento }}, {{ finalizado }}],
         backgroundColor: ['#d40511', '#ffcc00', '#1d7a43'],
         borderColor: '#ffffff',
-        borderWidth: 3
+        borderWidth: 4,
+        hoverOffset: 8
       }]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            font: { size: 12, weight: '700' }
-          }
-        }
-      }
+      ...commonPieOptions,
+      cutout: '58%'
     }
   });
 
@@ -714,10 +791,11 @@
         label: 'Ocorrências',
         data: turnoData,
         backgroundColor: '#d40511',
-        borderRadius: 8
+        borderRadius: 10,
+        maxBarThickness: 58
       }]
     },
-    options: commonOptions
+    options: commonBarOptions
   });
 
   new Chart(document.getElementById('chartPrioridade'), {
@@ -728,21 +806,11 @@
         data: prioridadeData,
         backgroundColor: ['#d40511', '#ffcc00', '#f59e0b', '#1d7a43', '#64748b', '#b1030d'],
         borderColor: '#ffffff',
-        borderWidth: 3
+        borderWidth: 4,
+        hoverOffset: 8
       }]
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            font: { size: 12, weight: '700' }
-          }
-        }
-      }
-    }
+    options: commonPieOptions
   });
 
   new Chart(document.getElementById('chartSite'), {
@@ -755,10 +823,11 @@
         backgroundColor: '#ffcc00',
         borderColor: '#c99d00',
         borderWidth: 1.5,
-        borderRadius: 8
+        borderRadius: 10,
+        maxBarThickness: 58
       }]
     },
-    options: commonOptions
+    options: commonBarOptions
   });
 </script>
 
