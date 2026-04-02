@@ -1,0 +1,183 @@
+<!doctype html>
+
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}DHL Security{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    :root{
+      --dhl-yellow:#ffcc00;
+      --dhl-red:#d40511;
+      --bg:#f4f5f7;
+      --card:#ffffff;
+      --text:#1f2937;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+    }
+
+    *{ box-sizing:border-box; }
+
+    body{
+      margin:0;
+      font-family:Arial, Helvetica, sans-serif;
+      background:var(--bg);
+    }
+
+    /* 🔥 TOPBAR DHL */
+    .topbar{
+      position:fixed;
+      top:0;
+      left:0;
+      right:0;
+      height:70px;
+      background:var(--dhl-red);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 30px;
+      z-index:1000;
+      box-shadow:0 4px 12px rgba(0,0,0,.15);
+    }
+
+    .topbar-left{
+      display:flex;
+      align-items:center;
+      gap:15px;
+    }
+
+    .logo{
+      height:42px;
+    }
+
+    .system-name{
+      color:#fff;
+      font-weight:800;
+      font-size:18px;
+      letter-spacing:.5px;
+    }
+
+    .topbar-right{
+      display:flex;
+      align-items:center;
+      gap:15px;
+    }
+
+    .user-info{
+      color:#fff;
+      font-size:14px;
+      font-weight:600;
+    }
+
+    .btn-logout{
+      background:#fff;
+      color:var(--dhl-red);
+      border:none;
+      padding:8px 14px;
+      border-radius:8px;
+      font-weight:700;
+      cursor:pointer;
+    }
+
+    .btn-logout:hover{
+      background:#ffeaea;
+    }
+
+    /* 🔥 CONTEÚDO */
+    .main{
+      margin-top:90px;
+      padding:30px;
+    }
+
+    .container{
+      width:100%;
+      max-width:1400px;
+      margin:0 auto;
+    }
+
+    /* 🔥 FLASH */
+    .flash{
+      margin-bottom:16px;
+      padding:12px;
+      border-radius:10px;
+      font-weight:700;
+      background:#fff4db;
+      color:#9a6700;
+    }
+
+    .flash.success{
+      background:#e6fffa;
+      color:#065f46;
+    }
+
+    .flash.danger{
+      background:#ffe4e6;
+      color:#9f1239;
+    }
+
+    .flash.warning{
+      background:#fff4db;
+      color:#9a6700;
+    }
+
+    /* RESPONSIVO */
+    @media (max-width: 768px){
+      .topbar{
+        flex-direction:column;
+        height:auto;
+        padding:10px;
+        gap:10px;
+      }
+
+      .main{
+        margin-top:120px;
+        padding:20px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- 🔥 TOPBAR -->
+<div class="topbar">
+
+  <div class="topbar-left">
+    <img src="{{ url_for('static', filename='logo.png') }}" class="logo">
+    <div class="system-name">DHL SECURITY</div>
+  </div>
+
+  <div class="topbar-right">
+    {% if session.get('username') %}
+      <div class="user-info">
+        {{ session.get('username') }} ({{ session.get('user_role') }})
+      </div>
+
+      <a href="{{ url_for('logout') }}">
+        <button class="btn-logout">Sair</button>
+      </a>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- 🔥 CONTEÚDO -->
+<div class="main">
+  <div class="container">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block body %}{% endblock %}
+
+  </div>
+</div>
+
+</body>
+</html>

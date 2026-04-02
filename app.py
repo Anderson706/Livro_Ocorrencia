@@ -221,6 +221,11 @@ def resumo_cards():
     }
 
 
+def pode_criar_admin_publicamente():
+    admin_existe = User.query.filter_by(role="ADMIN").first()
+    return admin_existe is None
+
+
 # =========================
 # AUTH
 # =========================
@@ -244,7 +249,10 @@ def login():
         flash("Login realizado com sucesso.", "success")
         return redirect(url_for("index"))
 
-    return render_template("login.html")
+    return render_template(
+        "login.html",
+        permitir_admin_publico=pode_criar_admin_publicamente()
+    )
 
 
 @app.route("/logout")
@@ -252,6 +260,68 @@ def logout():
     session.clear()
     flash("Sessão encerrada com sucesso.", "success")
     return redirect(url_for("login"))
+
+
+# =========================
+# CRIAÇÃO DE USUÁRIO PELA TELA DE LOGIN
+# =========================
+@app.route("/criar-usuario", methods=["GET", "POST"])
+def criar_usuario():
+    admin_publico_liberado = pode_criar_admin_publicamente()
+    usuario_logado_admin = session.get("user_role") == "ADMIN"
+
+    if request.method == "POST":
+        nome = (request.form.get("nome") or "").strip()
+        email = (request.form.get("email") or "").strip().lower()
+        senha = request.form.get("senha") or ""
+        role_solicitado = (request.form.get("role") or "USER").strip().upper()
+        site = (request.form.get("site") or "").strip().upper()
+
+        if not nome or not email or not senha:
+            flash("Preencha nome, e-mail e senha.", "danger")
+            return redirect(url_for("criar_usuario"))
+
+        if role_solicitado not in ["ADMIN", "USER"]:
+            role_solicitado = "USER"
+
+        # Segurança:
+        # ADMIN só pode ser criado se não existir nenhum admin ainda
+        # ou se quem estiver criando já for um admin logado.
+        if role_solicitado == "ADMIN" and not (admin_publico_liberado or usuario_logado_admin):
+            flash("Somente administradores podem criar outro administrador.", "danger")
+            return redirect(url_for("criar_usuario"))
+
+        existe = User.query.filter_by(email=email).first()
+        if existe:
+            flash("Já existe um usuário com esse e-mail.", "warning")
+            return redirect(url_for("criar_usuario"))
+
+        novo = User(
+            nome=nome,
+            email=email,
+            role=role_solicitado,
+            site=site,
+            is_active=True
+        )
+        novo.set_password(senha)
+
+        db.session.add(novo)
+        db.session.commit()
+
+        flash("Usuário criado com sucesso.", "success")
+
+        # Se foi criação pública pela tela de login, volta para login
+        if not session.get("user_id"):
+            return redirect(url_for("login"))
+
+        # Se admin logado criou, volta para lista de usuários
+        return redirect(url_for("usuarios"))
+
+    return render_template(
+        "criar_usuario.html",
+        permitir_admin_publico=admin_publico_liberado,
+        usuario_logado_admin=usuario_logado_admin
+    )
 
 
 # =========================
@@ -278,6 +348,9 @@ def novo_usuario():
             flash("Preencha nome, e-mail e senha.", "danger")
             return redirect(url_for("novo_usuario"))
 
+        if role not in ["ADMIN", "USER"]:
+            role = "USER"
+
         existe = User.query.filter_by(email=email).first()
         if existe:
             flash("Já existe um usuário com esse e-mail.", "warning")
@@ -298,7 +371,10 @@ def novo_usuario():
         flash("Usuário criado com sucesso.", "success")
         return redirect(url_for("usuarios"))
 
-    return render_template("usuario_form.html", usuario=None)
+    return render_template(
+        "usuario_form.html",
+        usuario=None
+    )
 
 
 @app.route("/usuarios/<int:user_id>/editar", methods=["GET", "POST"])
@@ -309,7 +385,7 @@ def editar_usuario(user_id):
     if request.method == "POST":
         nome = (request.form.get("nome") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
-        senha = request.form.get("senha") or ""
+        senha = (request.form.get("senha") or "").strip()
         role = (request.form.get("role") or "USER").strip().upper()
         site = (request.form.get("site") or "").strip().upper()
         is_active = (request.form.get("is_active") or "").strip() == "1"
@@ -317,6 +393,9 @@ def editar_usuario(user_id):
         if not nome or not email:
             flash("Preencha nome e e-mail.", "danger")
             return redirect(url_for("editar_usuario", user_id=user_id))
+
+        if role not in ["ADMIN", "USER"]:
+            role = "USER"
 
         existe = User.query.filter(User.email == email, User.id != usuario.id).first()
         if existe:
@@ -329,8 +408,8 @@ def editar_usuario(user_id):
         usuario.site = site
         usuario.is_active = is_active
 
-        if senha.strip():
-            usuario.set_password(senha.strip())
+        if senha:
+            usuario.set_password(senha)
 
         db.session.commit()
         flash("Usuário atualizado com sucesso.", "success")
