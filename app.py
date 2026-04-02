@@ -284,9 +284,6 @@ def criar_usuario():
         if role_solicitado not in ["ADMIN", "USER"]:
             role_solicitado = "USER"
 
-        # Segurança:
-        # ADMIN só pode ser criado se não existir nenhum admin ainda
-        # ou se quem estiver criando já for um admin logado.
         if role_solicitado == "ADMIN" and not (admin_publico_liberado or usuario_logado_admin):
             flash("Somente administradores podem criar outro administrador.", "danger")
             return redirect(url_for("criar_usuario"))
@@ -310,11 +307,9 @@ def criar_usuario():
 
         flash("Usuário criado com sucesso.", "success")
 
-        # Se foi criação pública pela tela de login, volta para login
         if not session.get("user_id"):
             return redirect(url_for("login"))
 
-        # Se admin logado criou, volta para lista de usuários
         return redirect(url_for("usuarios"))
 
     return render_template(
@@ -371,10 +366,7 @@ def novo_usuario():
         flash("Usuário criado com sucesso.", "success")
         return redirect(url_for("usuarios"))
 
-    return render_template(
-        "usuario_form.html",
-        usuario=None
-    )
+    return render_template("usuario_form.html", usuario=None)
 
 
 @app.route("/usuarios/<int:user_id>/editar", methods=["GET", "POST"])
@@ -444,13 +436,17 @@ def index():
     ocorrencias = [o.to_dict() for o in ocorrencias_db]
     ultima_ocorrencia = ocorrencias[0] if ocorrencias else None
 
+    ultimo_id = db.session.query(func.max(OcorrenciaTurno.id)).scalar() or 0
+    proximo_id_previsto = ultimo_id + 1
+
     return render_template(
         "livro_ocorrencia.html",
         resumo=resumo_cards(),
         ultima_ocorrencia=ultima_ocorrencia,
         ocorrencias=ocorrencias,
         filtros=filtros,
-        hoje=date.today().strftime("%Y-%m-%d")
+        hoje=date.today().strftime("%Y-%m-%d"),
+        proximo_id_previsto=proximo_id_previsto
     )
 
 
