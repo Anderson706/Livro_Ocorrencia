@@ -1,713 +1,1121 @@
-{% extends "base.html" %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Livro de Ocorrência - Passagem de Turno</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-{% block title %}Livro de Ocorrência - Passagem de Turno{% endblock %}
+  <style>
+    :root{
+      --dhl-yellow:#ffcc00;
+      --dhl-red:#d40511;
+      --dhl-red-dark:#b3030e;
+      --dhl-black:#1f1f1f;
+      --bg:#f3f5f7;
+      --card:#ffffff;
+      --line:#e5e7eb;
+      --text:#1f2937;
+      --muted:#6b7280;
+      --shadow:0 12px 28px rgba(15,23,42,.08);
+      --radius:20px;
 
-{% block body %}
+      --sidebar:#161a1d;
+      --sidebar-2:#20262b;
 
-<style>
-  :root{
-    --dhl-yellow:#ffcc00;
-    --dhl-red:#d40511;
-    --dhl-red-dark:#b3030e;
-    --dhl-black:#1f1f1f;
-    --bg:#f4f5f7;
-    --card:#ffffff;
-    --line:#e5e7eb;
-    --text:#1f2937;
-    --muted:#6b7280;
-    --shadow:0 10px 24px rgba(0,0,0,.08);
-    --ok-bg:#e8f7ee;
-    --ok-text:#146c43;
-    --warn-bg:#fff4db;
-    --warn-text:#9a6700;
-    --danger-bg:#fde8ea;
-    --danger-text:#b42318;
-    --neutral-bg:#eef1f4;
-    --neutral-text:#3f4a5a;
-    --close-green:#15803d;
-    --close-green-dark:#166534;
-  }
+      --ok-bg:#e8f7ee;
+      --ok-text:#146c43;
+      --warn-bg:#fff4db;
+      --warn-text:#9a6700;
+      --danger-bg:#fde8ea;
+      --danger-text:#b42318;
+      --neutral-bg:#eef1f4;
+      --neutral-text:#3f4a5a;
 
-  *{box-sizing:border-box}
+      --close-green:#15803d;
+      --close-green-dark:#166534;
+    }
 
-  .wrap{
-    width:100%;
-    max-width:1680px;
-    margin:0 auto;
-  }
+    *{ box-sizing:border-box; }
 
-  .hero{
-    position:relative;
-    overflow:hidden;
-    background:linear-gradient(135deg, rgba(212,5,17,.98), rgba(145,0,10,.96));
-    color:#fff;
-    border-radius:24px;
-    padding:24px;
-    box-shadow:var(--shadow);
-    margin-bottom:18px;
-  }
+    html, body{
+      margin:0;
+      padding:0;
+      min-height:100vh;
+      background:var(--bg);
+      color:var(--text);
+      font-family:Arial, Helvetica, sans-serif;
+    }
 
-  .hero-content{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    gap:18px;
-    flex-wrap:wrap;
-  }
+    a{ text-decoration:none; }
 
-  .hero h1{
-    margin:0 0 8px 0;
-    font-size:30px;
-    font-weight:800;
-  }
+    .app-shell{
+      display:flex;
+      min-height:100vh;
+      width:100%;
+    }
 
-  .hero p{
-    margin:0;
-    max-width:900px;
-    line-height:1.45;
-  }
+    .sidebar{
+      width:260px;
+      background:linear-gradient(180deg,var(--sidebar),var(--sidebar-2));
+      color:#fff;
+      position:fixed;
+      top:0;
+      left:0;
+      bottom:0;
+      padding:22px 18px;
+      box-shadow:6px 0 22px rgba(0,0,0,.12);
+      z-index:1000;
+      overflow-y:auto;
+    }
 
-  .hero-badge{
-    background:rgba(255,204,0,.18);
-    border:1px solid rgba(255,204,0,.38);
-    color:#fff7cf;
-    padding:10px 14px;
-    border-radius:999px;
-    font-weight:700;
-    font-size:13px;
-  }
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding-bottom:18px;
+      margin-bottom:18px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
 
-  .hero-user{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    flex-wrap:wrap;
-  }
+    .brand-badge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:max-content;
+      padding:7px 12px;
+      border-radius:999px;
+      background:var(--dhl-yellow);
+      color:#111;
+      font-size:11px;
+      font-weight:900;
+      letter-spacing:.5px;
+    }
 
-  .avatar{
-    width:44px;
-    height:44px;
-    border-radius:50%;
-    background:linear-gradient(180deg,#fff8db,#ffd84d);
-    color:#7a2500;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:900;
-    font-size:18px;
-  }
+    .brand-title{
+      font-size:22px;
+      font-weight:900;
+      letter-spacing:.3px;
+      line-height:1.1;
+    }
 
-  .logout-btn{
-    background:#fff;
-    color:#d40511;
-    font-weight:800;
-    padding:10px 14px;
-    border-radius:999px;
-    text-decoration:none;
-    border:2px solid #fff;
-    cursor:pointer;
-  }
+    .brand-sub{
+      font-size:12px;
+      color:rgba(255,255,255,.72);
+      line-height:1.5;
+    }
 
-  .grid{display:grid; gap:16px;}
-  .grid-4{grid-template-columns:repeat(4,1fr);}
-  .grid-2{grid-template-columns:repeat(2,1fr);}
+    .menu-title{
+      margin:18px 0 10px;
+      font-size:11px;
+      color:rgba(255,255,255,.5);
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.8px;
+    }
 
-  @media (max-width:1180px){
-    .grid-4{grid-template-columns:repeat(2,1fr);}
-    .grid-2{grid-template-columns:1fr;}
-  }
+    .menu{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
 
-  @media (max-width:700px){
-    .grid-4{grid-template-columns:1fr;}
-  }
+    .menu a{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      color:#fff;
+      padding:12px 14px;
+      border-radius:14px;
+      font-size:14px;
+      font-weight:700;
+      transition:.18s ease;
+      border:1px solid transparent;
+    }
 
-  .card{
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:22px;
-    padding:18px;
-    box-shadow:var(--shadow);
-  }
+    .menu a:hover,
+    .menu a.active{
+      background:rgba(255,255,255,.08);
+      border-color:rgba(255,255,255,.10);
+      transform:translateX(2px);
+    }
 
-  .section-title{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:12px;
-    margin-bottom:12px;
-    flex-wrap:wrap;
-  }
+    .menu .dot{
+      width:10px;
+      height:10px;
+      border-radius:50%;
+      background:var(--dhl-yellow);
+      flex:0 0 10px;
+    }
 
-  .section-title h3{margin:0;}
+    .main{
+      margin-left:260px;
+      width:calc(100% - 260px);
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+    }
 
-  .section-chip{
-    background:#fff8db;
-    color:#7a5a00;
-    border:1px solid #f5d66f;
-    border-radius:999px;
-    padding:6px 10px;
-    font-size:12px;
-    font-weight:700;
-  }
+    .topbar{
+      height:76px;
+      background:#fff;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      padding:0 24px;
+      position:sticky;
+      top:0;
+      z-index:900;
+    }
 
-  .kpi{
-    min-height:118px;
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-    gap:8px;
-    position:relative;
-    overflow:hidden;
-    background:linear-gradient(180deg,#fff,#fffef7);
-  }
+    .topbar-left h1{
+      margin:0;
+      font-size:20px;
+      font-weight:900;
+      color:var(--dhl-black);
+    }
 
-  .kpi .label{
-    color:var(--muted);
-    font-size:12px;
-    text-transform:uppercase;
-    letter-spacing:.6px;
-    font-weight:700;
-  }
+    .topbar-left p{
+      margin:4px 0 0;
+      font-size:12px;
+      color:var(--muted);
+    }
 
-  .kpi .value{
-    font-size:32px;
-    font-weight:800;
-    color:var(--dhl-red);
-  }
+    .topbar-right{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
 
-  .row{
-    display:flex;
-    gap:12px;
-    flex-wrap:wrap;
-    align-items:end;
-  }
+    .top-chip{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:8px 12px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      border:1px solid #efd56f;
+      background:#fff8d8;
+      color:#7a5a00;
+      white-space:nowrap;
+    }
 
-  .field{
-    display:flex;
-    flex-direction:column;
-    gap:6px;
-    flex:1;
-    min-width:220px;
-  }
+    .content{
+      padding:24px;
+    }
 
-  .field label{
-    font-size:13px;
-    color:var(--muted);
-    font-weight:700;
-  }
+    .flash-wrap{
+      margin-bottom:16px;
+    }
 
-  .field input, .field select, .field textarea{
-    width:100%;
-    border:1px solid #d6dae1;
-    background:#fff;
-    border-radius:14px;
-    padding:13px 14px;
-    font-size:14px;
-    outline:none;
-    font-family:Arial, Helvetica, sans-serif;
-  }
+    .flash{
+      margin-bottom:12px;
+      padding:12px 14px;
+      border-radius:12px;
+      font-weight:700;
+      border:1px solid transparent;
+    }
 
-  .field textarea{
-    min-height:110px;
-    resize:vertical;
-  }
+    .flash.success{
+      background:#e6fffa;
+      color:#065f46;
+      border-color:#a7f3d0;
+    }
 
-  .readonly-field{
-    background:#f3f4f6 !important;
-    color:#6b7280;
-    font-weight:700;
-  }
+    .flash.danger{
+      background:#ffe4e6;
+      color:#9f1239;
+      border-color:#fecdd3;
+    }
 
-  .actions{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    margin-top:12px;
-  }
+    .flash.warning{
+      background:#fff4db;
+      color:#9a6700;
+      border-color:#f5d66f;
+    }
 
-  .btn{
-    border:none;
-    border-radius:14px;
-    padding:12px 16px;
-    cursor:pointer;
-    font-weight:800;
-    text-decoration:none;
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-  }
+    .hero{
+      position:relative;
+      overflow:hidden;
+      background:linear-gradient(135deg,#d40511,#93000a);
+      color:#fff;
+      border-radius:24px;
+      padding:24px 26px;
+      box-shadow:var(--shadow);
+      margin-bottom:20px;
+    }
 
-  .btn-primary{background:linear-gradient(180deg,var(--dhl-yellow),#f1be00); color:#2b2b2b;}
-  .btn-red{background:linear-gradient(180deg,var(--dhl-red),var(--dhl-red-dark)); color:#fff;}
-  .btn-dark{background:linear-gradient(180deg,#3e434a,#262a2f); color:#fff;}
-  .btn-soft{background:#fff6cf; color:#6d5400; border:1px solid #f0d66a;}
-  .btn-close{background:linear-gradient(180deg,var(--close-green),var(--close-green-dark)); color:#fff;}
+    .hero::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(circle at 85% 18%, rgba(255,204,0,.25), transparent 16%),
+        radial-gradient(circle at 72% 80%, rgba(255,255,255,.08), transparent 20%);
+      pointer-events:none;
+    }
 
-  .table-wrap{
-    overflow:auto;
-    border:1px solid var(--line);
-    border-radius:18px;
-    background:#fff;
-  }
+    .hero-content{
+      position:relative;
+      z-index:1;
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:20px;
+      flex-wrap:wrap;
+    }
 
-  table{
-    width:100%;
-    border-collapse:collapse;
-    min-width:1700px;
-    background:#fff;
-  }
+    .hero h2{
+      margin:0 0 8px 0;
+      font-size:30px;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
 
-  th, td{
-    padding:10px 12px;
-    border-bottom:1px solid #edf0f4;
-    text-align:left;
-    vertical-align:top;
-    font-size:13px;
-  }
+    .hero p{
+      margin:0;
+      max-width:920px;
+      line-height:1.55;
+      font-size:14px;
+      opacity:.96;
+    }
 
-  thead th{
-    background:linear-gradient(180deg,#fff8db,#ffefab);
-    color:#4b3c00;
-    position:sticky;
-    top:0;
-    z-index:2;
-    font-weight:800;
-    white-space:nowrap;
-  }
+    .hero-user{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
 
-  tbody tr:hover{background:#fffdf5;}
-  .row-finalizado{background:#f5fbf7;}
-  .row-finalizado:hover{background:#edf8f1;}
+    .hero-badge{
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.18);
+      color:#fff;
+      padding:10px 14px;
+      border-radius:999px;
+      font-weight:800;
+      font-size:12px;
+      white-space:nowrap;
+    }
 
-  .badge{
-    display:inline-block;
-    padding:7px 11px;
-    border-radius:999px;
-    font-size:12px;
-    font-weight:800;
-    white-space:nowrap;
-    border:1px solid transparent;
-  }
+    .avatar{
+      width:46px;
+      height:46px;
+      border-radius:50%;
+      background:linear-gradient(180deg,#fff8db,#ffd84d);
+      color:#7a2500;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:900;
+      font-size:18px;
+      box-shadow:0 8px 18px rgba(0,0,0,.14);
+    }
 
-  .ok{background:var(--ok-bg); color:var(--ok-text); border-color:#b7e1c6;}
-  .warnb{background:var(--warn-bg); color:var(--warn-text); border-color:#f4d58d;}
-  .dangerb{background:var(--danger-bg); color:var(--danger-text); border-color:#f3c2c8;}
-  .mutedb{background:var(--neutral-bg); color:var(--neutral-text); border-color:#d8dde6;}
+    .section{
+      margin-bottom:22px;
+    }
 
-  .small{font-size:12px; color:var(--muted);}
+    .section-title{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      margin-bottom:14px;
+      flex-wrap:wrap;
+    }
 
-  .result-panel{
-    border:1px solid #f3d56c;
-    background:linear-gradient(180deg,#fffdf5,#fff8db);
-  }
+    .section-title h3{
+      margin:0;
+      font-size:20px;
+      font-weight:900;
+      color:var(--dhl-black);
+    }
 
-  .inline-form{display:inline;}
+    .section-chip{
+      background:#fff8db;
+      color:#7a5a00;
+      border:1px solid #f5d66f;
+      border-radius:999px;
+      padding:7px 12px;
+      font-size:12px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.3px;
+    }
 
-  .id-chip{
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    padding:7px 12px;
-    background:#fff;
-    border:1px solid #f3d56c;
-    border-radius:999px;
-    font-size:12px;
-    font-weight:800;
-    color:#8a6200;
-  }
+    .grid{
+      display:grid;
+      gap:16px;
+    }
 
-  .table-actions{
-    display:flex;
-    gap:6px;
-    flex-wrap:wrap;
-  }
-</style>
+    .grid-4{
+      grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    }
 
-<div class="wrap">
-  <div class="hero">
-    <div class="hero-content">
-      <div>
+    .grid-2{
+      grid-template-columns:repeat(auto-fit,minmax(520px,1fr));
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      padding:18px;
+      box-shadow:var(--shadow);
+      min-width:0;
+    }
+
+    .kpi{
+      min-height:128px;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      gap:8px;
+      position:relative;
+      overflow:hidden;
+      background:linear-gradient(180deg,#fff,#fffef7);
+      border-left:6px solid var(--dhl-yellow);
+    }
+
+    .kpi::after{
+      content:"";
+      position:absolute;
+      right:-18px;
+      top:-18px;
+      width:88px;
+      height:88px;
+      border-radius:50%;
+      background:rgba(255,204,0,.15);
+    }
+
+    .kpi .label{
+      color:var(--muted);
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.6px;
+      font-weight:800;
+      position:relative;
+      z-index:1;
+    }
+
+    .kpi .value{
+      font-size:34px;
+      font-weight:900;
+      color:var(--dhl-red);
+      line-height:1;
+      position:relative;
+      z-index:1;
+    }
+
+    .row{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      align-items:end;
+    }
+
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      flex:1;
+      min-width:220px;
+    }
+
+    .field label{
+      font-size:13px;
+      color:var(--muted);
+      font-weight:800;
+    }
+
+    .field input,
+    .field select,
+    .field textarea{
+      width:100%;
+      border:1px solid #d6dae1;
+      background:#fff;
+      border-radius:14px;
+      padding:13px 14px;
+      font-size:14px;
+      outline:none;
+      font-family:Arial, Helvetica, sans-serif;
+      transition:border-color .18s ease, box-shadow .18s ease;
+    }
+
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus{
+      border-color:#d40511;
+      box-shadow:0 0 0 4px rgba(212,5,17,.08);
+    }
+
+    .field textarea{
+      min-height:110px;
+      resize:vertical;
+    }
+
+    .readonly-field{
+      background:#f3f4f6 !important;
+      color:#6b7280;
+      font-weight:700;
+    }
+
+    .small{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.45;
+    }
+
+    .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:12px;
+    }
+
+    .btn{
+      border:none;
+      border-radius:14px;
+      padding:12px 16px;
+      cursor:pointer;
+      font-weight:800;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      transition:.18s ease;
+    }
+
+    .btn:hover{ transform:translateY(-1px); }
+
+    .btn-primary{
+      background:linear-gradient(180deg,var(--dhl-yellow),#f1be00);
+      color:#2b2b2b;
+    }
+
+    .btn-red{
+      background:linear-gradient(180deg,var(--dhl-red),var(--dhl-red-dark));
+      color:#fff;
+      box-shadow:0 8px 18px rgba(212,5,17,.20);
+    }
+
+    .btn-dark{
+      background:linear-gradient(180deg,#3e434a,#262a2f);
+      color:#fff;
+    }
+
+    .btn-soft{
+      background:#fff6cf;
+      color:#6d5400;
+      border:1px solid #f0d66a;
+    }
+
+    .btn-close{
+      background:linear-gradient(180deg,var(--close-green),var(--close-green-dark));
+      color:#fff;
+    }
+
+    .result-panel{
+      border:1px solid #f3d56c;
+      background:linear-gradient(180deg,#fffdf5,#fff8db);
+    }
+
+    .id-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:7px 12px;
+      background:#fff;
+      border:1px solid #f3d56c;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      color:#8a6200;
+    }
+
+    .inline-form{
+      display:inline;
+    }
+
+    .table-wrap{
+      overflow:auto;
+      border:1px solid var(--line);
+      border-radius:18px;
+      background:#fff;
+    }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      min-width:1700px;
+      background:#fff;
+    }
+
+    th, td{
+      padding:10px 12px;
+      border-bottom:1px solid #edf0f4;
+      text-align:left;
+      vertical-align:top;
+      font-size:13px;
+    }
+
+    thead th{
+      background:linear-gradient(180deg,#fff8db,#ffefab);
+      color:#4b3c00;
+      position:sticky;
+      top:0;
+      z-index:2;
+      font-weight:800;
+      white-space:nowrap;
+    }
+
+    tbody tr:hover{
+      background:#fffdf5;
+    }
+
+    .row-finalizado{
+      background:#f5fbf7;
+    }
+
+    .row-finalizado:hover{
+      background:#edf8f1;
+    }
+
+    .badge{
+      display:inline-block;
+      padding:7px 11px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      white-space:nowrap;
+      border:1px solid transparent;
+    }
+
+    .ok{ background:var(--ok-bg); color:var(--ok-text); border-color:#b7e1c6; }
+    .warnb{ background:var(--warn-bg); color:var(--warn-text); border-color:#f4d58d; }
+    .dangerb{ background:var(--danger-bg); color:var(--danger-text); border-color:#f3c2c8; }
+    .mutedb{ background:var(--neutral-bg); color:var(--neutral-text); border-color:#d8dde6; }
+
+    .table-actions{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+
+    .top-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .top-link{
+      background:#fff;
+      color:#d40511;
+      font-weight:800;
+      padding:10px 14px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.35);
+    }
+
+    @media (max-width:1100px){
+      .sidebar{
+        position:relative;
+        width:100%;
+        height:auto;
+        inset:auto;
+      }
+
+      .main{
+        margin-left:0;
+        width:100%;
+      }
+
+      .app-shell{
+        flex-direction:column;
+      }
+
+      .grid-2{
+        grid-template-columns:1fr;
+      }
+    }
+
+    @media (max-width:700px){
+      .content{
+        padding:16px;
+      }
+
+      .topbar{
+        padding:14px 16px;
+        height:auto;
+        align-items:flex-start;
+        flex-direction:column;
+      }
+
+      .grid-4,
+      .grid-2{
+        grid-template-columns:1fr;
+      }
+
+      .hero h2{
+        font-size:24px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-badge">DHL SECURITY</span>
+      <div class="brand-title">Livro de<br>Ocorrências</div>
+      <div class="brand-sub">
+        Controle corporativo de passagem de turno, pendências, tratativas e rastreabilidade operacional.
+      </div>
+    </div>
+
+    <div class="menu-title">Navegação</div>
+    <nav class="menu">
+      <a href="{{ url_for('index') }}" class="active"><span class="dot"></span> Livro de ocorrências</a>
+      <a href="{{ url_for('dashboard_ocorrencias') }}"><span class="dot"></span> Dashboard</a>
+      {% if session.get('user_role') == 'ADMIN' %}
+        <a href="{{ url_for('usuarios') }}"><span class="dot"></span> Usuários</a>
+      {% endif %}
+      <a href="{{ url_for('logout') }}"><span class="dot"></span> Sair</a>
+    </nav>
+
+    <div class="menu-title">Acesso rápido</div>
+    <nav class="menu">
+      <a href="#nova-ocorrencia"><span class="dot"></span> Nova ocorrência</a>
+      <a href="#filtros"><span class="dot"></span> Filtros</a>
+      <a href="#historico"><span class="dot"></span> Histórico</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-left">
         <h1>Livro de Ocorrência - Passagem de Turno</h1>
-        <p>
-          Registro operacional padronizado para passagem de turno, com controle por site,
-          rastreabilidade, pendências, ações tomadas e acompanhamento completo das ocorrências.
-        </p>
+        <p>Registro padronizado com visão gerencial e controle operacional</p>
       </div>
 
-      <div class="hero-user">
-        <div class="avatar">{{ (session.get('username', 'U')[:1] or 'U')|upper }}</div>
-        <div class="hero-badge">{{ session.get('username', 'Usuário') }} | {{ session.get('user_role', 'USER') }}</div>
+      <div class="topbar-right">
+        <span class="top-chip">{{ session.get('username', 'Usuário') }} | {{ session.get('user_role', 'USER') }}</span>
+      </div>
+    </header>
 
-        {% if session.get('user_role') == 'ADMIN' %}
-          <a href="{{ url_for('usuarios') }}" class="logout-btn">Usuários</a>
+    <div class="content">
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-wrap">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
         {% endif %}
+      {% endwith %}
 
-        <a href="{{ url_for('dashboard_ocorrencias') }}" class="logout-btn">Dashboard</a>
-        <a href="{{ url_for('logout') }}" class="logout-btn">Sair</a>
-      </div>
-    </div>
-  </div>
+      <section class="hero">
+        <div class="hero-content">
+          <div>
+            <h2>Passagem de turno com padrão enterprise</h2>
+            <p>
+              Plataforma corporativa para registrar, acompanhar e finalizar ocorrências operacionais,
+              garantindo continuidade entre turnos, visibilidade das pendências e histórico centralizado.
+            </p>
+          </div>
 
-  <div class="grid grid-4">
-    <div class="card kpi">
-      <div class="label">Ocorrências do dia</div>
-      <div class="value">{{ resumo.ocorrencias_dia or 0 }}</div>
-    </div>
-    <div class="card kpi">
-      <div class="label">Pendências em aberto</div>
-      <div class="value">{{ resumo.pendencias_abertas or 0 }}</div>
-    </div>
-    <div class="card kpi">
-      <div class="label">Turnos registrados</div>
-      <div class="value">{{ resumo.turnos_registrados or 0 }}</div>
-    </div>
-    <div class="card kpi">
-      <div class="label">Ocorrências críticas</div>
-      <div class="value">{{ resumo.ocorrencias_criticas or 0 }}</div>
-    </div>
-  </div>
+          <div class="hero-user">
+            <div class="avatar">{{ (session.get('username', 'U')[:1] or 'U')|upper }}</div>
+            <span class="hero-badge">Operational Control</span>
+            <span class="hero-badge">Shift Handover</span>
 
-  <div style="height:16px"></div>
-
-  <div class="grid grid-2">
-    <div class="card">
-      <div class="section-title">
-        <h3>Nova ocorrência</h3>
-        <span class="section-chip">Registro operacional</span>
-      </div>
-
-      <form method="POST" action="{{ url_for('salvar_ocorrencia_turno') }}">
-        <div class="row">
-          <div class="field">
-            <label>ID da ocorrência</label>
-            <input type="text" value="#{{ proximo_id_previsto or '---' }}" readonly class="readonly-field">
-            <div class="small">
-              Prévia do próximo ID disponível. O número definitivo será confirmado ao salvar.
+            <div class="top-actions">
+              {% if session.get('user_role') == 'ADMIN' %}
+                <a href="{{ url_for('usuarios') }}" class="top-link">Usuários</a>
+              {% endif %}
+              <a href="{{ url_for('dashboard_ocorrencias') }}" class="top-link">Dashboard</a>
+              <a href="{{ url_for('logout') }}" class="top-link">Sair</a>
             </div>
           </div>
         </div>
+      </section>
 
-        <div style="height:12px"></div>
-
-        <div class="row">
-          <div class="field">
-            <label>Data</label>
-            <input type="date" name="data_ocorrencia" value="{{ hoje }}" required>
-          </div>
-          <div class="field">
-            <label>Data/Hora</label>
-            <input type="datetime-local" name="data_hora_registro" required>
-          </div>
-          <div class="field">
-            <label>Site</label>
-            <select name="site" required>
-              <option value="">Selecione</option>
-              <option value="PG">P&G</option>
-              <option value="SHEIN">SHEIN</option>
-              <option value="ADIDAS">ADIDAS</option>
-              <option value="MELI">MELI</option>
-              <option value="SANGOBAN">SANGOBAN</option>
-            </select>
-          </div>
-        </div>
-
-        <div style="height:12px"></div>
-
-        <div class="row">
-          <div class="field">
-            <label>Turno</label>
-            <select name="turno" required>
-              <option value="">Selecione</option>
-              <option value="TURNO A">1° Turno</option>
-              <option value="TURNO B">2° Turno</option>
-              <option value="TURNO C">3° Turno</option>
-              <option value="ADM">ADM</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Setor / Área</label>
-            <input type="text" name="setor" placeholder="Ex.: PORTARIA" required>
-          </div>
-          <div class="field">
-            <label>Tipo de ocorrência</label>
-            <select name="tipo_ocorrencia" required>
-              <option value="">Selecione</option>
-              <option value="ROTINA">ROTINA</option>
-              <option value="DESVIO DE PROCESSO">DESVIO DE PROCESSO</option>
-              <option value="EXTRAVIO">EXTRAVIO</option>
-              <option value="INCIDENTE">INCIDENTE</option>
-              <option value="MANUTENCAO">MANUTENÇÃO</option>
-              <option value="PENDENCIA">PENDÊNCIA</option>
-              <option value="INFORMATIVO">INFORMATIVO</option>
-            </select>
-          </div>
-        </div>
-
-        <div style="height:12px"></div>
-
-        <div class="row">
-          <div class="field">
-            <label>Prioridade</label>
-            <select name="prioridade" required>
-              <option value="">Selecione</option>
-              <option value="BAIXA">BAIXA</option>
-              <option value="MEDIA">MÉDIA</option>
-              <option value="ALTA">ALTA</option>
-              <option value="CRITICA">CRÍTICA</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Status</label>
-            <select name="status" required>
-              <option value="">Selecione</option>
-              <option value="EM ABERTO">EM ABERTO</option>
-              <option value="EM ACOMPANHAMENTO">EM ACOMPANHAMENTO</option>
-              <option value="FINALIZADO">FINALIZADO</option>
-            </select>
-          </div>
-        </div>
-
-        <div style="height:12px"></div>
-
-        <div class="row">
-          <div class="field">
-            <label>Responsável que está saindo</label>
-            <input type="text" name="responsavel_saida" required>
-          </div>
-          <div class="field">
-            <label>Responsável que está assumindo</label>
-            <input type="text" name="responsavel_entrada" required>
-          </div>
-        </div>
-
-        <div style="height:12px"></div>
-
-        <div class="field">
-          <label>Descrição</label>
-          <textarea name="descricao" required></textarea>
-        </div>
-
-        <div style="height:12px"></div>
-
-        <div class="field">
-          <label>Ações tomadas</label>
-          <textarea name="acoes_tomadas"></textarea>
-        </div>
-
-        <div style="height:12px"></div>
-
-        <div class="field">
-          <label>Pendências</label>
-          <textarea name="pendencias"></textarea>
-        </div>
-
-        <div class="actions">
-          <button type="submit" class="btn btn-red">Salvar ocorrência</button>
-          <a href="{{ url_for('export_ocorrencias_excel', data_inicial=filtros.data_inicial, data_final=filtros.data_final, turno=filtros.turno, status=filtros.status, site=filtros.site) }}" class="btn btn-dark">Exportar Excel</a>
-          <a href="{{ url_for('export_ocorrencias_pdf', data_inicial=filtros.data_inicial, data_final=filtros.data_final, turno=filtros.turno, status=filtros.status, site=filtros.site) }}" class="btn btn-soft">Exportar PDF</a>
-        </div>
-      </form>
-    </div>
-
-    <div class="card">
-      <div class="section-title">
-        <h3>Última ocorrência registrada</h3>
-        <span class="section-chip">Resumo</span>
-      </div>
-
-      {% if ultima_ocorrencia %}
-        <div class="card result-panel" style="padding:14px;">
-          <div style="margin-bottom:8px;">
-            <span class="id-chip">ID da ocorrência: #{{ ultima_ocorrencia.id }}</span>
+      <section class="section">
+        <div class="grid grid-4">
+          <div class="card kpi">
+            <div class="label">Ocorrências do dia</div>
+            <div class="value">{{ resumo.ocorrencias_dia or 0 }}</div>
           </div>
 
-          <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
-            <a href="{{ url_for('export_ocorrencia_individual_pdf', ocorrencia_id=ultima_ocorrencia.id) }}" class="btn btn-dark">
-              Exportar esta ocorrência em PDF
-            </a>
-
-            {% if ultima_ocorrencia.status != 'FINALIZADO' %}
-              <form method="POST"
-                    action="{{ url_for('fechar_ocorrencia', ocorrencia_id=ultima_ocorrencia.id) }}"
-                    class="inline-form"
-                    onsubmit="return confirm('Deseja finalizar esta ocorrência?');">
-                <button type="submit" class="btn btn-close">
-                  Finalizar ocorrência
-                </button>
-              </form>
-            {% endif %}
+          <div class="card kpi">
+            <div class="label">Pendências em aberto</div>
+            <div class="value">{{ resumo.pendencias_abertas or 0 }}</div>
           </div>
 
-          <div><strong>Data/Hora:</strong> {{ ultima_ocorrencia.data_hora_registro }}</div>
-          <div><strong>Site:</strong> {{ ultima_ocorrencia.site }}</div>
-          <div><strong>Turno:</strong> {{ ultima_ocorrencia.turno }}</div>
-          <div><strong>Setor:</strong> {{ ultima_ocorrencia.setor }}</div>
-          <div><strong>Tipo:</strong> {{ ultima_ocorrencia.tipo_ocorrencia }}</div>
-          <div><strong>Prioridade:</strong> {{ ultima_ocorrencia.prioridade }}</div>
-          <div><strong>Status:</strong> {{ ultima_ocorrencia.status }}</div>
-          <div><strong>Resp. saída:</strong> {{ ultima_ocorrencia.responsavel_saida }}</div>
-          <div><strong>Resp. entrada:</strong> {{ ultima_ocorrencia.responsavel_entrada }}</div>
+          <div class="card kpi">
+            <div class="label">Turnos registrados</div>
+            <div class="value">{{ resumo.turnos_registrados or 0 }}</div>
+          </div>
 
-          <div style="margin-top:10px;"><strong>Descrição:</strong></div>
-          <div>{{ ultima_ocorrencia.descricao }}</div>
-
-          <div style="margin-top:10px;"><strong>Pendências:</strong></div>
-          <div>{{ ultima_ocorrencia.pendencias or '-' }}</div>
+          <div class="card kpi">
+            <div class="label">Ocorrências críticas</div>
+            <div class="value">{{ resumo.ocorrencias_criticas or 0 }}</div>
+          </div>
         </div>
-      {% else %}
-        <div class="small">Nenhuma ocorrência cadastrada até o momento.</div>
-      {% endif %}
-    </div>
-  </div>
+      </section>
 
-  <div style="height:16px"></div>
+      <section class="section" id="nova-ocorrencia">
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="section-title">
+              <h3>Nova ocorrência</h3>
+              <span class="section-chip">Registro operacional</span>
+            </div>
 
-  <div class="card">
-    <div class="section-title">
-      <h3>Filtros</h3>
-      <span class="section-chip">Consulta</span>
-    </div>
+            <form method="POST" action="{{ url_for('salvar_ocorrencia_turno') }}">
+              <div class="row">
+                <div class="field">
+                  <label>ID da ocorrência</label>
+                  <input type="text" value="#{{ proximo_id_previsto or '---' }}" readonly class="readonly-field">
+                  <div class="small">
+                    Prévia do próximo ID disponível. O número definitivo será confirmado ao salvar.
+                  </div>
+                </div>
+              </div>
 
-    <form method="GET" action="{{ url_for('index') }}">
-      <div class="row">
-        <div class="field">
-          <label>Data inicial</label>
-          <input type="date" name="data_inicial" value="{{ filtros.data_inicial }}">
-        </div>
-        <div class="field">
-          <label>Data final</label>
-          <input type="date" name="data_final" value="{{ filtros.data_final }}">
-        </div>
-        <div class="field">
-          <label>Turno</label>
-          <select name="turno">
-            <option value="">Todos</option>
-            <option value="TURNO A" {% if filtros.turno == 'TURNO A' %}selected{% endif %}>TURNO A</option>
-            <option value="TURNO B" {% if filtros.turno == 'TURNO B' %}selected{% endif %}>TURNO B</option>
-            <option value="TURNO C" {% if filtros.turno == 'TURNO C' %}selected{% endif %}>TURNO C</option>
-            <option value="ADM" {% if filtros.turno == 'ADM' %}selected{% endif %}>ADM</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Status</label>
-          <select name="status">
-            <option value="">Todos</option>
-            <option value="EM ABERTO" {% if filtros.status == 'EM ABERTO' %}selected{% endif %}>EM ABERTO</option>
-            <option value="EM ACOMPANHAMENTO" {% if filtros.status == 'EM ACOMPANHAMENTO' %}selected{% endif %}>EM ACOMPANHAMENTO</option>
-            <option value="FINALIZADO" {% if filtros.status == 'FINALIZADO' %}selected{% endif %}>FINALIZADO</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Site</label>
-          <select name="site">
-            <option value="">Todos</option>
-            <option value="PG" {% if filtros.site == 'PG' %}selected{% endif %}>P&G</option>
-            <option value="SHEIN" {% if filtros.site == 'SHEIN' %}selected{% endif %}>SHEIN</option>
-            <option value="ADIDAS" {% if filtros.site == 'ADIDAS' %}selected{% endif %}>ADIDAS</option>
-            <option value="MELI" {% if filtros.site == 'MELI' %}selected{% endif %}>MELI</option>
-            <option value="SANGOBAN" {% if filtros.site == 'SANGOBAN' %}selected{% endif %}>SANGOBAN</option>
-          </select>
-        </div>
-      </div>
+              <div style="height:12px"></div>
 
-      <div class="actions">
-        <button type="submit" class="btn btn-primary">Filtrar</button>
-        <a href="{{ url_for('index') }}" class="btn btn-soft">Limpar filtros</a>
-      </div>
-    </form>
-  </div>
+              <div class="row">
+                <div class="field">
+                  <label>Data</label>
+                  <input type="date" name="data_ocorrencia" value="{{ hoje }}" required>
+                </div>
+                <div class="field">
+                  <label>Data/Hora</label>
+                  <input type="datetime-local" name="data_hora_registro" required>
+                </div>
+                <div class="field">
+                  <label>Site</label>
+                  <select name="site" required>
+                    <option value="">Selecione</option>
+                    <option value="PG">P&G</option>
+                    <option value="SHEIN">SHEIN</option>
+                    <option value="ADIDAS">ADIDAS</option>
+                    <option value="MELI">MELI</option>
+                    <option value="SANGOBAN">SANGOBAN</option>
+                  </select>
+                </div>
+              </div>
 
-  <div style="height:16px"></div>
+              <div style="height:12px"></div>
 
-  <div class="card">
-    <div class="section-title">
-      <h3>Histórico de ocorrências</h3>
-      <span class="section-chip">Passagem de turno</span>
-    </div>
+              <div class="row">
+                <div class="field">
+                  <label>Turno</label>
+                  <select name="turno" required>
+                    <option value="">Selecione</option>
+                    <option value="TURNO A">1° Turno</option>
+                    <option value="TURNO B">2° Turno</option>
+                    <option value="TURNO C">3° Turno</option>
+                    <option value="ADM">ADM</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Setor / Área</label>
+                  <input type="text" name="setor" placeholder="Ex.: PORTARIA" required>
+                </div>
+                <div class="field">
+                  <label>Tipo de ocorrência</label>
+                  <select name="tipo_ocorrencia" required>
+                    <option value="">Selecione</option>
+                    <option value="ROTINA">ROTINA</option>
+                    <option value="DESVIO DE PROCESSO">DESVIO DE PROCESSO</option>
+                    <option value="EXTRAVIO">EXTRAVIO</option>
+                    <option value="INCIDENTE">INCIDENTE</option>
+                    <option value="MANUTENCAO">MANUTENÇÃO</option>
+                    <option value="PENDENCIA">PENDÊNCIA</option>
+                    <option value="INFORMATIVO">INFORMATIVO</option>
+                  </select>
+                </div>
+              </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Data/Hora</th>
-            <th>Site</th>
-            <th>Turno</th>
-            <th>Setor</th>
-            <th>Tipo</th>
-            <th>Prioridade</th>
-            <th>Status</th>
-            <th>Resp. saída</th>
-            <th>Resp. entrada</th>
-            <th>Descrição</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in ocorrencias %}
-            <tr class="{% if r.status == 'FINALIZADO' %}row-finalizado{% endif %}">
-              <td><strong>#{{ r.id }}</strong></td>
-              <td>{{ r.data_hora_registro }}</td>
-              <td>{{ r.site }}</td>
-              <td>{{ r.turno }}</td>
-              <td>{{ r.setor }}</td>
-              <td>{{ r.tipo_ocorrencia }}</td>
-              <td>
-                <span class="badge {% if r.prioridade == 'CRITICA' %}dangerb{% elif r.prioridade == 'ALTA' %}warnb{% else %}mutedb{% endif %}">
-                  {{ r.prioridade }}
-                </span>
-              </td>
-              <td>
-                <span class="badge {% if r.status == 'FINALIZADO' %}ok{% elif r.status == 'EM ACOMPANHAMENTO' %}warnb{% else %}dangerb{% endif %}">
-                  {{ r.status }}
-                </span>
-              </td>
-              <td>{{ r.responsavel_saida }}</td>
-              <td>{{ r.responsavel_entrada }}</td>
-              <td>{{ r.descricao }}</td>
-              <td>
-                <div class="table-actions">
-                  {% if r.status != 'FINALIZADO' %}
-                    <a href="{{ url_for('editar_ocorrencia', ocorrencia_id=r.id) }}"
-                       class="btn btn-dark"
-                       style="padding:8px 10px;">
-                      Editar
-                    </a>
+              <div style="height:12px"></div>
 
+              <div class="row">
+                <div class="field">
+                  <label>Prioridade</label>
+                  <select name="prioridade" required>
+                    <option value="">Selecione</option>
+                    <option value="BAIXA">BAIXA</option>
+                    <option value="MEDIA">MÉDIA</option>
+                    <option value="ALTA">ALTA</option>
+                    <option value="CRITICA">CRÍTICA</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Status</label>
+                  <select name="status" required>
+                    <option value="">Selecione</option>
+                    <option value="EM ABERTO">EM ABERTO</option>
+                    <option value="EM ACOMPANHAMENTO">EM ACOMPANHAMENTO</option>
+                    <option value="FINALIZADO">FINALIZADO</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="row">
+                <div class="field">
+                  <label>Responsável que está saindo</label>
+                  <input type="text" name="responsavel_saida" required>
+                </div>
+                <div class="field">
+                  <label>Responsável que está assumindo</label>
+                  <input type="text" name="responsavel_entrada" required>
+                </div>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="field">
+                <label>Descrição</label>
+                <textarea name="descricao" required></textarea>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="field">
+                <label>Ações tomadas</label>
+                <textarea name="acoes_tomadas"></textarea>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="field">
+                <label>Pendências</label>
+                <textarea name="pendencias"></textarea>
+              </div>
+
+              <div class="actions">
+                <button type="submit" class="btn btn-red">Salvar ocorrência</button>
+                <a href="{{ url_for('export_ocorrencias_excel', data_inicial=filtros['data_inicial'], data_final=filtros['data_final'], turno=filtros['turno'], status=filtros['status'], site=filtros['site']) }}" class="btn btn-dark">Exportar Excel</a>
+                <a href="{{ url_for('export_ocorrencias_pdf', data_inicial=filtros['data_inicial'], data_final=filtros['data_final'], turno=filtros['turno'], status=filtros['status'], site=filtros['site']) }}" class="btn btn-soft">Exportar PDF</a>
+              </div>
+            </form>
+          </div>
+
+          <div class="card">
+            <div class="section-title">
+              <h3>Última ocorrência registrada</h3>
+              <span class="section-chip">Resumo</span>
+            </div>
+
+            {% if ultima_ocorrencia %}
+              <div class="card result-panel" style="padding:14px;">
+                <div style="margin-bottom:8px;">
+                  <span class="id-chip">ID da ocorrência: #{{ ultima_ocorrencia.id }}</span>
+                </div>
+
+                <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
+                  <a href="{{ url_for('export_ocorrencia_individual_pdf', ocorrencia_id=ultima_ocorrencia.id) }}" class="btn btn-dark">
+                    Exportar esta ocorrência em PDF
+                  </a>
+
+                  {% if ultima_ocorrencia.status != 'FINALIZADO' %}
                     <form method="POST"
-                          action="{{ url_for('fechar_ocorrencia', ocorrencia_id=r.id) }}"
+                          action="{{ url_for('fechar_ocorrencia', ocorrencia_id=ultima_ocorrencia.id) }}"
                           class="inline-form"
                           onsubmit="return confirm('Deseja finalizar esta ocorrência?');">
-                      <button type="submit"
-                              class="btn btn-close"
-                              style="padding:8px 10px;">
-                        Finalizar
+                      <button type="submit" class="btn btn-close">
+                        Finalizar ocorrência
                       </button>
                     </form>
                   {% endif %}
-
-                  <form method="POST"
-                        action="{{ url_for('excluir_ocorrencia', ocorrencia_id=r.id) }}"
-                        class="inline-form"
-                        onsubmit="return confirm('Deseja excluir esta ocorrência?');">
-                    <button type="submit"
-                            class="btn btn-red"
-                            style="padding:8px 10px;">
-                      Excluir
-                    </button>
-                  </form>
                 </div>
-              </td>
-            </tr>
-          {% else %}
-            <tr>
-              <td colspan="12">Nenhuma ocorrência registrada.</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+
+                <div><strong>Data/Hora:</strong> {{ ultima_ocorrencia.data_hora_registro }}</div>
+                <div><strong>Site:</strong> {{ ultima_ocorrencia.site }}</div>
+                <div><strong>Turno:</strong> {{ ultima_ocorrencia.turno }}</div>
+                <div><strong>Setor:</strong> {{ ultima_ocorrencia.setor }}</div>
+                <div><strong>Tipo:</strong> {{ ultima_ocorrencia.tipo_ocorrencia }}</div>
+                <div><strong>Prioridade:</strong> {{ ultima_ocorrencia.prioridade }}</div>
+                <div><strong>Status:</strong> {{ ultima_ocorrencia.status }}</div>
+                <div><strong>Resp. saída:</strong> {{ ultima_ocorrencia.responsavel_saida }}</div>
+                <div><strong>Resp. entrada:</strong> {{ ultima_ocorrencia.responsavel_entrada }}</div>
+
+                <div style="margin-top:10px;"><strong>Descrição:</strong></div>
+                <div>{{ ultima_ocorrencia.descricao }}</div>
+
+                <div style="margin-top:10px;"><strong>Pendências:</strong></div>
+                <div>{{ ultima_ocorrencia.pendencias or '-' }}</div>
+              </div>
+            {% else %}
+              <div class="small">Nenhuma ocorrência cadastrada até o momento.</div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="filtros">
+        <div class="card">
+          <div class="section-title">
+            <h3>Filtros</h3>
+            <span class="section-chip">Consulta</span>
+          </div>
+
+          <form method="GET" action="{{ url_for('index') }}">
+            <div class="row">
+              <div class="field">
+                <label>Data inicial</label>
+                <input type="date" name="data_inicial" value="{{ filtros['data_inicial'] }}">
+              </div>
+              <div class="field">
+                <label>Data final</label>
+                <input type="date" name="data_final" value="{{ filtros['data_final'] }}">
+              </div>
+              <div class="field">
+                <label>Turno</label>
+                <select name="turno">
+                  <option value="">Todos</option>
+                  <option value="TURNO A" {% if filtros['turno'] == 'TURNO A' %}selected{% endif %}>TURNO A</option>
+                  <option value="TURNO B" {% if filtros['turno'] == 'TURNO B' %}selected{% endif %}>TURNO B</option>
+                  <option value="TURNO C" {% if filtros['turno'] == 'TURNO C' %}selected{% endif %}>TURNO C</option>
+                  <option value="ADM" {% if filtros['turno'] == 'ADM' %}selected{% endif %}>ADM</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Status</label>
+                <select name="status">
+                  <option value="">Todos</option>
+                  <option value="EM ABERTO" {% if filtros['status'] == 'EM ABERTO' %}selected{% endif %}>EM ABERTO</option>
+                  <option value="EM ACOMPANHAMENTO" {% if filtros['status'] == 'EM ACOMPANHAMENTO' %}selected{% endif %}>EM ACOMPANHAMENTO</option>
+                  <option value="FINALIZADO" {% if filtros['status'] == 'FINALIZADO' %}selected{% endif %}>FINALIZADO</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Site</label>
+                <select name="site">
+                  <option value="">Todos</option>
+                  <option value="PG" {% if filtros['site'] == 'PG' %}selected{% endif %}>P&G</option>
+                  <option value="SHEIN" {% if filtros['site'] == 'SHEIN' %}selected{% endif %}>SHEIN</option>
+                  <option value="ADIDAS" {% if filtros['site'] == 'ADIDAS' %}selected{% endif %}>ADIDAS</option>
+                  <option value="MELI" {% if filtros['site'] == 'MELI' %}selected{% endif %}>MELI</option>
+                  <option value="SANGOBAN" {% if filtros['site'] == 'SANGOBAN' %}selected{% endif %}>SANGOBAN</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button type="submit" class="btn btn-primary">Filtrar</button>
+              <a href="{{ url_for('index') }}" class="btn btn-soft">Limpar filtros</a>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="section" id="historico">
+        <div class="card">
+          <div class="section-title">
+            <h3>Histórico de ocorrências</h3>
+            <span class="section-chip">Passagem de turno</span>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Data/Hora</th>
+                  <th>Site</th>
+                  <th>Turno</th>
+                  <th>Setor</th>
+                  <th>Tipo</th>
+                  <th>Prioridade</th>
+                  <th>Status</th>
+                  <th>Resp. saída</th>
+                  <th>Resp. entrada</th>
+                  <th>Descrição</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in ocorrencias %}
+                  <tr class="{% if r.status == 'FINALIZADO' %}row-finalizado{% endif %}">
+                    <td><strong>#{{ r.id }}</strong></td>
+                    <td>{{ r.data_hora_registro }}</td>
+                    <td>{{ r.site }}</td>
+                    <td>{{ r.turno }}</td>
+                    <td>{{ r.setor }}</td>
+                    <td>{{ r.tipo_ocorrencia }}</td>
+                    <td>
+                      <span class="badge {% if r.prioridade == 'CRITICA' %}dangerb{% elif r.prioridade == 'ALTA' %}warnb{% else %}mutedb{% endif %}">
+                        {{ r.prioridade }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="badge {% if r.status == 'FINALIZADO' %}ok{% elif r.status == 'EM ACOMPANHAMENTO' %}warnb{% else %}dangerb{% endif %}">
+                        {{ r.status }}
+                      </span>
+                    </td>
+                    <td>{{ r.responsavel_saida }}</td>
+                    <td>{{ r.responsavel_entrada }}</td>
+                    <td>{{ r.descricao }}</td>
+                    <td>
+                      <div class="table-actions">
+                        {% if r.status != 'FINALIZADO' %}
+                          <a href="{{ url_for('editar_ocorrencia', ocorrencia_id=r.id) }}"
+                             class="btn btn-dark"
+                             style="padding:8px 10px;">
+                            Editar
+                          </a>
+
+                          <form method="POST"
+                                action="{{ url_for('fechar_ocorrencia', ocorrencia_id=r.id) }}"
+                                class="inline-form"
+                                onsubmit="return confirm('Deseja finalizar esta ocorrência?');">
+                            <button type="submit"
+                                    class="btn btn-close"
+                                    style="padding:8px 10px;">
+                              Finalizar
+                            </button>
+                          </form>
+                        {% endif %}
+
+                        <form method="POST"
+                              action="{{ url_for('excluir_ocorrencia', ocorrencia_id=r.id) }}"
+                              class="inline-form"
+                              onsubmit="return confirm('Deseja excluir esta ocorrência?');">
+                          <button type="submit"
+                                  class="btn btn-red"
+                                  style="padding:8px 10px;">
+                            Excluir
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                {% else %}
+                  <tr>
+                    <td colspan="12">Nenhuma ocorrência registrada.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
     </div>
-  </div>
+  </main>
 </div>
 
-{% endblock %}
+</body>
+</html>

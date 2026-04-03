@@ -1,5 +1,6 @@
 import os
 from io import BytesIO
+from html import escape
 from datetime import datetime, date
 from functools import wraps
 
@@ -8,7 +9,7 @@ from flask import (
     flash, session, send_file
 )
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func
+from sqlalchemy import func, case
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from openpyxl import Workbook
@@ -33,6 +34,26 @@ app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
+
+
+# =========================
+# CONSTANTES / PADRÕES
+# =========================
+SITES_VALIDOS = {"PG", "SHEIN", "ADIDAS", "MELI", "SANGOBAN"}
+TURNOS_VALIDOS = {"TURNO A", "TURNO B", "TURNO C", "ADM"}
+TIPOS_VALIDOS = {
+    "ROTINA",
+    "DESVIO DE PROCESSO",
+    "EXTRAVIO",
+    "INCIDENTE",
+    "MANUTENCAO",
+    "MANUTENÇÃO",
+    "PENDENCIA",
+    "PENDÊNCIA",
+    "INFORMATIVO",
+}
+PRIORIDADES_VALIDAS = {"BAIXA", "MEDIA", "MÉDIA", "ALTA", "CRITICA", "CRÍTICA"}
+STATUS_VALIDOS = {"EM ABERTO", "EM ACOMPANHAMENTO", "FINALIZADO"}
 
 
 # =========================
@@ -100,6 +121,8 @@ class OcorrenciaTurno(db.Model):
             "pendencias": self.pendencias or "",
             "status": self.status,
             "criado_por": self.criado_por or "",
+            "created_at": self.created_at.strftime("%d/%m/%Y %H:%M") if self.created_at else "",
+            "updated_at": self.updated_at.strftime("%d/%m/%Y %H:%M") if self.updated_at else "",
         }
 
 
@@ -132,36 +155,82 @@ def admin_required(funcao):
 # =========================
 # HELPERS
 # =========================
+def normalizar_texto(valor: str) -> str:
+    return (valor or "").strip().upper()
+
+
+def normalizar_prioridade(valor: str) -> str:
+    valor = normalizar_texto(valor)
+    return "CRITICA" if valor == "CRÍTICA" else "MEDIA" if valor == "MÉDIA" else valor
+
+
+def normalizar_tipo(valor: str) -> str:
+    valor = normalizar_texto(valor)
+    if valor == "MANUTENÇÃO":
+        return "MANUTENCAO"
+    if valor == "PENDÊNCIA":
+        return "PENDENCIA"
+    return valor
+
+
 def parse_date_or_none(value: str):
     value = (value or "").strip()
     if not value:
         return None
-    return datetime.strptime(value, "%Y-%m-%d").date()
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
 
 
 def parse_datetime_local(value: str):
     value = (value or "").strip()
     if not value:
         return None
-    return datetime.strptime(value, "%Y-%m-%dT%H:%M")
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M")
+    except ValueError:
+        return None
+
+
+def format_date_input(value):
+    if not value:
+        return ""
+    if isinstance(value, str):
+        return value
+    return value.strftime("%Y-%m-%d")
+
+
+def format_datetime_local_input(value):
+    if not value:
+        return ""
+    if isinstance(value, str):
+        return value
+    return value.strftime("%Y-%m-%dT%H:%M")
+
+
+def pdf_safe(texto):
+    return escape(texto or "-")
 
 
 def get_filtros_ocorrencias():
     data_inicial = (request.args.get("data_inicial") or "").strip()
     data_final = (request.args.get("data_final") or "").strip()
-    turno = (request.args.get("turno") or "").strip().upper()
-    status = (request.args.get("status") or "").strip().upper()
-    site = (request.args.get("site") or "").strip().upper()
+    turno = normalizar_texto(request.args.get("turno"))
+    status = normalizar_texto(request.args.get("status"))
+    site = normalizar_texto(request.args.get("site"))
 
     query = OcorrenciaTurno.query
 
     if data_inicial:
-        di = datetime.strptime(data_inicial, "%Y-%m-%d").date()
-        query = query.filter(OcorrenciaTurno.data_ocorrencia >= di)
+        di = parse_date_or_none(data_inicial)
+        if di:
+            query = query.filter(OcorrenciaTurno.data_ocorrencia >= di)
 
     if data_final:
-        df = datetime.strptime(data_final, "%Y-%m-%d").date()
-        query = query.filter(OcorrenciaTurno.data_ocorrencia <= df)
+        df = parse_date_or_none(data_final)
+        if df:
+            query = query.filter(OcorrenciaTurno.data_ocorrencia <= df)
 
     if turno:
         query = query.filter(OcorrenciaTurno.turno == turno)
@@ -227,6 +296,26 @@ def pode_criar_admin_publicamente():
     return admin_existe is None
 
 
+def ordenar_turnos_query():
+    return case(
+        (OcorrenciaTurno.turno == "TURNO A", 1),
+        (OcorrenciaTurno.turno == "TURNO B", 2),
+        (OcorrenciaTurno.turno == "TURNO C", 3),
+        (OcorrenciaTurno.turno == "ADM", 4),
+        else_=99
+    )
+
+
+def ordenar_prioridade_query():
+    return case(
+        (OcorrenciaTurno.prioridade == "CRITICA", 1),
+        (OcorrenciaTurno.prioridade == "ALTA", 2),
+        (OcorrenciaTurno.prioridade == "MEDIA", 3),
+        (OcorrenciaTurno.prioridade == "BAIXA", 4),
+        else_=99
+    )
+
+
 # =========================
 # AUTH
 # =========================
@@ -264,27 +353,7 @@ def logout():
 
 
 # =========================
-# FECHAR OCORRÊNCIA
-# =========================
-@app.route("/ocorrencias/<int:ocorrencia_id>/fechar", methods=["POST"])
-@login_required
-def fechar_ocorrencia(ocorrencia_id):
-    ocorrencia = OcorrenciaTurno.query.get_or_404(ocorrencia_id)
-
-    try:
-        ocorrencia.status = "FINALIZADO"
-        ocorrencia.updated_at = datetime.now()
-        db.session.commit()
-        flash("Ocorrência finalizada com sucesso.", "success")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Erro ao finalizar ocorrência: {e}", "danger")
-
-    return redirect(url_for("index"))
-
-
-# =========================
-# CRIAÇÃO DE USUÁRIO PELA TELA DE LOGIN
+# CRIAÇÃO DE USUÁRIO
 # =========================
 @app.route("/criar-usuario", methods=["GET", "POST"])
 def criar_usuario():
@@ -295,14 +364,14 @@ def criar_usuario():
         nome = (request.form.get("nome") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         senha = request.form.get("senha") or ""
-        role_solicitado = (request.form.get("role") or "USER").strip().upper()
-        site = (request.form.get("site") or "").strip().upper()
+        role_solicitado = normalizar_texto(request.form.get("role") or "USER")
+        site = normalizar_texto(request.form.get("site"))
 
         if not nome or not email or not senha:
             flash("Preencha nome, e-mail e senha.", "danger")
             return redirect(url_for("criar_usuario"))
 
-        if role_solicitado not in ["ADMIN", "USER"]:
+        if role_solicitado not in {"ADMIN", "USER"}:
             role_solicitado = "USER"
 
         if role_solicitado == "ADMIN" and not (admin_publico_liberado or usuario_logado_admin):
@@ -357,14 +426,14 @@ def novo_usuario():
         nome = (request.form.get("nome") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         senha = request.form.get("senha") or ""
-        role = (request.form.get("role") or "USER").strip().upper()
-        site = (request.form.get("site") or "").strip().upper()
+        role = normalizar_texto(request.form.get("role") or "USER")
+        site = normalizar_texto(request.form.get("site"))
 
         if not nome or not email or not senha:
             flash("Preencha nome, e-mail e senha.", "danger")
             return redirect(url_for("novo_usuario"))
 
-        if role not in ["ADMIN", "USER"]:
+        if role not in {"ADMIN", "USER"}:
             role = "USER"
 
         existe = User.query.filter_by(email=email).first()
@@ -399,15 +468,15 @@ def editar_usuario(user_id):
         nome = (request.form.get("nome") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         senha = (request.form.get("senha") or "").strip()
-        role = (request.form.get("role") or "USER").strip().upper()
-        site = (request.form.get("site") or "").strip().upper()
+        role = normalizar_texto(request.form.get("role") or "USER")
+        site = normalizar_texto(request.form.get("site"))
         is_active = (request.form.get("is_active") or "").strip() == "1"
 
         if not nome or not email:
             flash("Preencha nome e e-mail.", "danger")
             return redirect(url_for("editar_usuario", user_id=user_id))
 
-        if role not in ["ADMIN", "USER"]:
+        if role not in {"ADMIN", "USER"}:
             role = "USER"
 
         existe = User.query.filter(User.email == email, User.id != usuario.id).first()
@@ -425,6 +494,12 @@ def editar_usuario(user_id):
             usuario.set_password(senha)
 
         db.session.commit()
+
+        if usuario.id == session.get("user_id"):
+            session["username"] = usuario.nome
+            session["user_role"] = usuario.role
+            session["user_site"] = usuario.site or ""
+
         flash("Usuário atualizado com sucesso.", "success")
         return redirect(url_for("usuarios"))
 
@@ -478,17 +553,17 @@ def salvar_ocorrencia_turno():
         data_ocorrencia = parse_date_or_none(request.form.get("data_ocorrencia"))
         data_hora_registro = parse_datetime_local(request.form.get("data_hora_registro"))
 
-        site = (request.form.get("site") or "").strip().upper()
-        turno = (request.form.get("turno") or "").strip().upper()
-        setor = (request.form.get("setor") or "").strip().upper()
-        tipo_ocorrencia = (request.form.get("tipo_ocorrencia") or "").strip().upper()
-        prioridade = (request.form.get("prioridade") or "").strip().upper()
+        site = normalizar_texto(request.form.get("site"))
+        turno = normalizar_texto(request.form.get("turno"))
+        setor = normalizar_texto(request.form.get("setor"))
+        tipo_ocorrencia = normalizar_tipo(request.form.get("tipo_ocorrencia"))
+        prioridade = normalizar_prioridade(request.form.get("prioridade"))
         responsavel_saida = (request.form.get("responsavel_saida") or "").strip()
         responsavel_entrada = (request.form.get("responsavel_entrada") or "").strip()
         descricao = (request.form.get("descricao") or "").strip()
         acoes_tomadas = (request.form.get("acoes_tomadas") or "").strip()
         pendencias = (request.form.get("pendencias") or "").strip()
-        status = (request.form.get("status") or "").strip().upper()
+        status = normalizar_texto(request.form.get("status"))
 
         if not all([
             data_ocorrencia, data_hora_registro, site, turno, setor,
@@ -496,6 +571,22 @@ def salvar_ocorrencia_turno():
             responsavel_entrada, descricao, status
         ]):
             flash("Preencha todos os campos obrigatórios.", "danger")
+            return redirect(url_for("index"))
+
+        if site not in SITES_VALIDOS:
+            flash("Site inválido.", "danger")
+            return redirect(url_for("index"))
+
+        if turno not in TURNOS_VALIDOS:
+            flash("Turno inválido.", "danger")
+            return redirect(url_for("index"))
+
+        if prioridade not in {"BAIXA", "MEDIA", "ALTA", "CRITICA"}:
+            flash("Prioridade inválida.", "danger")
+            return redirect(url_for("index"))
+
+        if status not in STATUS_VALIDOS:
+            flash("Status inválido.", "danger")
             return redirect(url_for("index"))
 
         nova = OcorrenciaTurno(
@@ -536,17 +627,17 @@ def editar_ocorrencia(ocorrencia_id):
             ocorrencia.data_ocorrencia = parse_date_or_none(request.form.get("data_ocorrencia"))
             ocorrencia.data_hora_registro = parse_datetime_local(request.form.get("data_hora_registro"))
 
-            ocorrencia.site = (request.form.get("site") or "").strip().upper()
-            ocorrencia.turno = (request.form.get("turno") or "").strip().upper()
-            ocorrencia.setor = (request.form.get("setor") or "").strip().upper()
-            ocorrencia.tipo_ocorrencia = (request.form.get("tipo_ocorrencia") or "").strip().upper()
-            ocorrencia.prioridade = (request.form.get("prioridade") or "").strip().upper()
+            ocorrencia.site = normalizar_texto(request.form.get("site"))
+            ocorrencia.turno = normalizar_texto(request.form.get("turno"))
+            ocorrencia.setor = normalizar_texto(request.form.get("setor"))
+            ocorrencia.tipo_ocorrencia = normalizar_tipo(request.form.get("tipo_ocorrencia"))
+            ocorrencia.prioridade = normalizar_prioridade(request.form.get("prioridade"))
             ocorrencia.responsavel_saida = (request.form.get("responsavel_saida") or "").strip()
             ocorrencia.responsavel_entrada = (request.form.get("responsavel_entrada") or "").strip()
             ocorrencia.descricao = (request.form.get("descricao") or "").strip()
             ocorrencia.acoes_tomadas = (request.form.get("acoes_tomadas") or "").strip() or None
             ocorrencia.pendencias = (request.form.get("pendencias") or "").strip() or None
-            ocorrencia.status = (request.form.get("status") or "").strip().upper()
+            ocorrencia.status = normalizar_texto(request.form.get("status"))
             ocorrencia.updated_at = datetime.now()
 
             if not all([
@@ -558,6 +649,22 @@ def editar_ocorrencia(ocorrencia_id):
                 flash("Preencha todos os campos obrigatórios.", "danger")
                 return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
 
+            if ocorrencia.site not in SITES_VALIDOS:
+                flash("Site inválido.", "danger")
+                return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
+
+            if ocorrencia.turno not in TURNOS_VALIDOS:
+                flash("Turno inválido.", "danger")
+                return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
+
+            if ocorrencia.prioridade not in {"BAIXA", "MEDIA", "ALTA", "CRITICA"}:
+                flash("Prioridade inválida.", "danger")
+                return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
+
+            if ocorrencia.status not in STATUS_VALIDOS:
+                flash("Status inválido.", "danger")
+                return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
+
             db.session.commit()
             flash("Ocorrência atualizada com sucesso.", "success")
             return redirect(url_for("index"))
@@ -567,7 +674,29 @@ def editar_ocorrencia(ocorrencia_id):
             flash(f"Erro ao atualizar ocorrência: {e}", "danger")
             return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
 
-    return render_template("ocorrencia_form.html", ocorrencia=ocorrencia)
+    return render_template(
+        "ocorrencia_form.html",
+        ocorrencia=ocorrencia,
+        data_ocorrencia_value=format_date_input(ocorrencia.data_ocorrencia),
+        data_hora_value=format_datetime_local_input(ocorrencia.data_hora_registro)
+    )
+
+
+@app.route("/ocorrencias/<int:ocorrencia_id>/fechar", methods=["POST"])
+@login_required
+def fechar_ocorrencia(ocorrencia_id):
+    ocorrencia = OcorrenciaTurno.query.get_or_404(ocorrencia_id)
+
+    try:
+        ocorrencia.status = "FINALIZADO"
+        ocorrencia.updated_at = datetime.now()
+        db.session.commit()
+        flash("Ocorrência finalizada com sucesso.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao finalizar ocorrência: {e}", "danger")
+
+    return redirect(url_for("index"))
 
 
 @app.route("/ocorrencias/<int:ocorrencia_id>/excluir", methods=["POST"])
@@ -591,20 +720,27 @@ def excluir_ocorrencia(ocorrencia_id):
 @login_required
 def dashboard_ocorrencias():
     total = db.session.query(func.count(OcorrenciaTurno.id)).scalar() or 0
-    em_aberto = db.session.query(func.count(OcorrenciaTurno.id)).filter(OcorrenciaTurno.status == "EM ABERTO").scalar() or 0
-    acompanhamento = db.session.query(func.count(OcorrenciaTurno.id)).filter(OcorrenciaTurno.status == "EM ACOMPANHAMENTO").scalar() or 0
-    finalizado = db.session.query(func.count(OcorrenciaTurno.id)).filter(OcorrenciaTurno.status == "FINALIZADO").scalar() or 0
+    em_aberto = db.session.query(func.count(OcorrenciaTurno.id)).filter(
+        OcorrenciaTurno.status == "EM ABERTO"
+    ).scalar() or 0
+    acompanhamento = db.session.query(func.count(OcorrenciaTurno.id)).filter(
+        OcorrenciaTurno.status == "EM ACOMPANHAMENTO"
+    ).scalar() or 0
+    finalizado = db.session.query(func.count(OcorrenciaTurno.id)).filter(
+        OcorrenciaTurno.status == "FINALIZADO"
+    ).scalar() or 0
 
     por_turno = (
         db.session.query(OcorrenciaTurno.turno, func.count(OcorrenciaTurno.id))
         .group_by(OcorrenciaTurno.turno)
-        .order_by(OcorrenciaTurno.turno.asc())
+        .order_by(ordenar_turnos_query())
         .all()
     )
 
     por_prioridade = (
         db.session.query(OcorrenciaTurno.prioridade, func.count(OcorrenciaTurno.id))
         .group_by(OcorrenciaTurno.prioridade)
+        .order_by(ordenar_prioridade_query())
         .all()
     )
 
@@ -702,6 +838,9 @@ def export_ocorrencias_excel():
     )
 
 
+# =========================
+# EXPORTAÇÃO PDF INDIVIDUAL
+# =========================
 @app.route("/ocorrencias/<int:ocorrencia_id>/pdf")
 @login_required
 def export_ocorrencia_individual_pdf(ocorrencia_id):
@@ -802,13 +941,13 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
     elementos.append(Spacer(1, 10))
 
     elementos.append(Paragraph("Descrição:", label_style))
-    elementos.append(Paragraph(ocorrencia.descricao or "-", text_style))
+    elementos.append(Paragraph(pdf_safe(ocorrencia.descricao), text_style))
 
     elementos.append(Paragraph("Ações tomadas:", label_style))
-    elementos.append(Paragraph(ocorrencia.acoes_tomadas or "-", text_style))
+    elementos.append(Paragraph(pdf_safe(ocorrencia.acoes_tomadas), text_style))
 
     elementos.append(Paragraph("Pendências:", label_style))
-    elementos.append(Paragraph(ocorrencia.pendencias or "-", text_style))
+    elementos.append(Paragraph(pdf_safe(ocorrencia.pendencias), text_style))
 
     elementos.append(Spacer(1, 8))
     elementos.append(
@@ -832,7 +971,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
 
 
 # =========================
-# EXPORTAÇÃO PDF
+# EXPORTAÇÃO PDF GERAL
 # =========================
 @app.route("/export-ocorrencias-pdf")
 @login_required
@@ -875,7 +1014,7 @@ def export_ocorrencias_pdf():
         f"Data final: {filtros['data_final'] or '-'} | Turno: {filtros['turno'] or '-'} | "
         f"Status: {filtros['status'] or '-'} | Site: {filtros['site'] or '-'}"
     )
-    elementos.append(Paragraph(filtro_txt, small_style))
+    elementos.append(Paragraph(pdf_safe(filtro_txt), small_style))
     elementos.append(Spacer(1, 6))
 
     data = [[
