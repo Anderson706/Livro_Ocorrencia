@@ -718,7 +718,9 @@ def excluir_ocorrencia(ocorrencia_id):
 # =========================
 @app.route("/dashboard-ocorrencias")
 @login_required
+
 def dashboard_ocorrencias():
+
     total = db.session.query(func.count(OcorrenciaTurno.id)).scalar() or 0
     em_aberto = db.session.query(func.count(OcorrenciaTurno.id)).filter(
         OcorrenciaTurno.status == "EM ABERTO"
