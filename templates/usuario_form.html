@@ -1,82 +1,491 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8">
-  <title>{% if usuario %}Editar Usuário{% else %}Novo Usuário{% endif %}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body{margin:0;font-family:Arial, Helvetica, sans-serif;background:#f4f5f7;padding:30px;}
-    .card{max-width:850px;margin:0 auto;background:#fff;border-radius:20px;padding:22px;box-shadow:0 10px 24px rgba(0,0,0,.08);}
-    .row{display:flex;gap:12px;flex-wrap:wrap;}
-    .field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:220px;}
-    label{font-size:13px;color:#6b7280;font-weight:700;}
-    input,select{width:100%;padding:12px 14px;border:1px solid #d6dae1;border-radius:12px;}
-    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
-    .btn{border:none;border-radius:12px;padding:12px 16px;cursor:pointer;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;}
-    .btn-red{background:#d40511;color:#fff;}
-    .btn-dark{background:#2f343a;color:#fff;}
-    h1{margin-top:0;color:#d40511;}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>{% if usuario %}Editar Usuário{% else %}Novo Usuário{% endif %}</h1>
+{% extends "base.html" %}
 
-    <form method="POST">
-      <div class="row">
-        <div class="field">
-          <label>Nome</label>
-          <input type="text" name="nome" value="{{ usuario.nome if usuario else '' }}" required>
+{% block title %}{% if usuario %}Editar Usuário{% else %}Novo Usuário{% endif %} | Livro de Ocorrência{% endblock %}
+
+{% block body %}
+
+<style>
+  :root{
+    --dhl-yellow:#ffcc00;
+    --dhl-red:#d40511;
+    --dhl-red-dark:#b3030e;
+    --dhl-black:#1f1f1f;
+    --bg:#f4f5f7;
+    --card:#ffffff;
+    --line:#e5e7eb;
+    --text:#1f2937;
+    --muted:#6b7280;
+    --shadow:0 12px 30px rgba(0,0,0,.10);
+    --radius:20px;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    background:var(--bg);
+  }
+
+  .page-wrap{
+    width:100%;
+    max-width:1100px;
+    margin:0 auto;
+    padding:24px;
+  }
+
+  .main-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+
+  .hero{
+    position:relative;
+    padding:26px 28px 20px 28px;
+    background:
+      linear-gradient(135deg, rgba(255,204,0,.20), rgba(255,255,255,1) 42%),
+      linear-gradient(90deg, #fff 0%, #fff 100%);
+    border-bottom:1px solid var(--line);
+  }
+
+  .hero::before{
+    content:"";
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:6px;
+    background:linear-gradient(90deg, var(--dhl-red) 0 78%, var(--dhl-yellow) 78% 100%);
+  }
+
+  .hero-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+
+  .hero-title-wrap{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+
+  .logo-top{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+
+  .logo-top img{
+    height:52px;
+    width:auto;
+    object-fit:contain;
+  }
+
+  .logo-text{
+    display:flex;
+    flex-direction:column;
+    line-height:1.1;
+  }
+
+  .logo-text strong{
+    font-size:15px;
+    color:var(--dhl-black);
+  }
+
+  .logo-text span{
+    font-size:12px;
+    color:var(--muted);
+    font-weight:700;
+  }
+
+  .hero-kicker{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    width:max-content;
+    padding:7px 12px;
+    border-radius:999px;
+    background:#fff7cc;
+    color:#7a5d00;
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    border:1px solid #ffe58f;
+  }
+
+  .hero h1{
+    margin:0;
+    font-size:30px;
+    line-height:1.1;
+    color:var(--dhl-black);
+    font-weight:900;
+    letter-spacing:.2px;
+  }
+
+  .hero p{
+    margin:0;
+    color:var(--muted);
+    font-size:14px;
+    max-width:760px;
+  }
+
+  .hero-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .content{
+    padding:24px 28px 28px 28px;
+  }
+
+  .form-card{
+    border:1px solid var(--line);
+    border-radius:18px;
+    overflow:hidden;
+    background:#fff;
+  }
+
+  .form-header{
+    padding:16px 18px;
+    border-bottom:1px solid var(--line);
+    background:#fcfcfd;
+  }
+
+  .form-title{
+    margin:0;
+    font-size:16px;
+    font-weight:900;
+    color:var(--text);
+  }
+
+  .form-subtitle{
+    margin:4px 0 0 0;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  .form-body{
+    padding:20px;
+  }
+
+  .row{
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:7px;
+    flex:1;
+    min-width:240px;
+  }
+
+  .field.full{
+    flex:1 1 100%;
+    min-width:100%;
+  }
+
+  label{
+    font-size:13px;
+    color:var(--muted);
+    font-weight:800;
+    letter-spacing:.02em;
+  }
+
+  input,
+  select{
+    width:100%;
+    min-height:46px;
+    padding:12px 14px;
+    border:1px solid #d6dae1;
+    border-radius:12px;
+    background:#fff;
+    color:var(--text);
+    font-size:14px;
+    outline:none;
+    transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+
+  input:focus,
+  select:focus{
+    border-color:var(--dhl-red);
+    box-shadow:0 0 0 4px rgba(212,5,17,.08);
+  }
+
+  .field-note{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:-2px;
+  }
+
+  .section-space{
+    height:16px;
+  }
+
+  .actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:22px;
+  }
+
+  .btn{
+    appearance:none;
+    border:none;
+    text-decoration:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-height:46px;
+    padding:0 18px;
+    border-radius:12px;
+    font-weight:800;
+    font-size:14px;
+    cursor:pointer;
+    transition:.18s ease;
+    box-shadow:0 6px 16px rgba(0,0,0,.08);
+  }
+
+  .btn:hover{
+    transform:translateY(-1px);
+  }
+
+  .btn-red{
+    background:linear-gradient(180deg, var(--dhl-red), var(--dhl-red-dark));
+    color:#fff;
+  }
+
+  .btn-dark{
+    background:#2f343a;
+    color:#fff;
+  }
+
+  .btn-light{
+    background:#fff;
+    color:var(--text);
+    border:1px solid var(--line);
+    box-shadow:none;
+  }
+
+  .info-strip{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
+    gap:14px;
+    margin-bottom:18px;
+  }
+
+  .info-box{
+    background:#fafafa;
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:16px 18px;
+  }
+
+  .info-label{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    color:var(--muted);
+    font-weight:800;
+    margin-bottom:6px;
+  }
+
+  .info-value{
+    font-size:18px;
+    font-weight:900;
+    color:var(--dhl-black);
+    line-height:1.1;
+  }
+
+  @media (max-width: 768px){
+    .page-wrap{
+      padding:14px;
+    }
+
+    .hero,
+    .content{
+      padding:18px;
+    }
+
+    .hero h1{
+      font-size:24px;
+    }
+
+    .btn{
+      width:100%;
+    }
+
+    .hero-actions{
+      width:100%;
+    }
+
+    .hero-actions a,
+    .hero-actions button{
+      flex:1 1 100%;
+    }
+
+    .actions .btn,
+    .actions a,
+    .actions button{
+      width:100%;
+    }
+  }
+</style>
+
+<div class="page-wrap">
+  <div class="main-card">
+
+    <div class="hero">
+      <div class="hero-top">
+        <div class="hero-title-wrap">
+          <div class="logo-top">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo DHL">
+            <div class="logo-text">
+              <strong>DHL Security</strong>
+              <span>Gestão administrativa de usuários</span>
+            </div>
+          </div>
+
+          <span class="hero-kicker">Administração • Cadastro e edição</span>
+
+          <h1>{% if usuario %}Editar Usuário{% else %}Novo Usuário{% endif %}</h1>
+          <p>
+            {% if usuario %}
+              Atualize os dados do usuário, permissões, site de atuação e status de acesso ao sistema.
+            {% else %}
+              Cadastre um novo usuário com controle de perfil, site e credenciais de acesso.
+            {% endif %}
+          </p>
         </div>
-        <div class="field">
-          <label>E-mail</label>
-          <input type="email" name="email" value="{{ usuario.email if usuario else '' }}" required>
+
+        <div class="hero-actions">
+          <a href="{{ url_for('usuarios') }}" class="btn btn-dark">Voltar</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="info-strip">
+        <div class="info-box">
+          <div class="info-label">Modo</div>
+          <div class="info-value">{% if usuario %}Edição{% else %}Cadastro{% endif %}</div>
+        </div>
+
+        <div class="info-box">
+          <div class="info-label">Perfil</div>
+          <div class="info-value">{{ usuario.role if usuario else 'Definir no formulário' }}</div>
+        </div>
+
+        <div class="info-box">
+          <div class="info-label">Site</div>
+          <div class="info-value">{{ usuario.site if usuario and usuario.site else '-' }}</div>
         </div>
       </div>
 
-      <div style="height:12px"></div>
+      <div class="form-card">
+        <div class="form-header">
+          <h2 class="form-title">Informações do usuário</h2>
+          <p class="form-subtitle">
+            Preencha os campos abaixo para salvar os dados do usuário no sistema.
+          </p>
+        </div>
 
-      <div class="row">
-        <div class="field">
-          <label>Senha {% if usuario %}(deixe em branco para manter){% endif %}</label>
-          <input type="password" name="senha" {% if not usuario %}required{% endif %}>
-        </div>
-        <div class="field">
-          <label>Perfil</label>
-          <select name="role" required>
-            <option value="USER" {% if usuario and usuario.role == 'USER' %}selected{% endif %}>USER</option>
-            <option value="ADMIN" {% if usuario and usuario.role == 'ADMIN' %}selected{% endif %}>ADMIN</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Site</label>
-          <select name="site">
-            <option value="">Selecione</option>
-            <option value="SITE 1" {% if usuario and usuario.site == 'SITE 1' %}selected{% endif %}>SITE 1</option>
-            <option value="SITE 2" {% if usuario and usuario.site == 'SITE 2' %}selected{% endif %}>SITE 2</option>
-            <option value="SITE 3" {% if usuario and usuario.site == 'SITE 3' %}selected{% endif %}>SITE 3</option>
-          </select>
+        <div class="form-body">
+          <form method="POST">
+            <div class="row">
+              <div class="field">
+                <label for="nome">Nome</label>
+                <input
+                  type="text"
+                  id="nome"
+                  name="nome"
+                  value="{{ usuario.nome if usuario else '' }}"
+                  required
+                >
+              </div>
+
+              <div class="field">
+                <label for="email">E-mail</label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value="{{ usuario.email if usuario else '' }}"
+                  required
+                >
+              </div>
+            </div>
+
+            <div class="section-space"></div>
+
+            <div class="row">
+              <div class="field">
+                <label for="senha">Senha {% if usuario %}(deixe em branco para manter){% endif %}</label>
+                <input
+                  type="password"
+                  id="senha"
+                  name="senha"
+                  {% if not usuario %}required{% endif %}
+                >
+                {% if usuario %}
+                  <div class="field-note">Ao deixar este campo em branco, a senha atual será mantida.</div>
+                {% endif %}
+              </div>
+
+              <div class="field">
+                <label for="role">Perfil</label>
+                <select id="role" name="role" required>
+                  <option value="USER" {% if usuario and usuario.role == 'USER' %}selected{% endif %}>USER</option>
+                  <option value="ADMIN" {% if usuario and usuario.role == 'ADMIN' %}selected{% endif %}>ADMIN</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="site">Site</label>
+                <select id="site" name="site">
+                  <option value="">Selecione</option>
+                  <option value="SITE 1" {% if usuario and usuario.site == 'SITE 1' %}selected{% endif %}>SITE 1</option>
+                  <option value="SITE 2" {% if usuario and usuario.site == 'SITE 2' %}selected{% endif %}>SITE 2</option>
+                  <option value="SITE 3" {% if usuario and usuario.site == 'SITE 3' %}selected{% endif %}>SITE 3</option>
+                </select>
+              </div>
+            </div>
+
+            {% if usuario %}
+            <div class="section-space"></div>
+
+            <div class="row">
+              <div class="field" style="max-width:260px;">
+                <label for="is_active">Ativo</label>
+                <select id="is_active" name="is_active">
+                  <option value="1" {% if usuario.is_active %}selected{% endif %}>SIM</option>
+                  <option value="0" {% if not usuario.is_active %}selected{% endif %}>NÃO</option>
+                </select>
+              </div>
+            </div>
+            {% endif %}
+
+            <div class="actions">
+              <button type="submit" class="btn btn-red">Salvar</button>
+              <a href="{{ url_for('usuarios') }}" class="btn btn-dark">Voltar</a>
+            </div>
+          </form>
         </div>
       </div>
 
-      {% if usuario %}
-      <div style="height:12px"></div>
-      <div class="row">
-        <div class="field">
-          <label>Ativo</label>
-          <select name="is_active">
-            <option value="1" {% if usuario.is_active %}selected{% endif %}>SIM</option>
-            <option value="0" {% if not usuario.is_active %}selected{% endif %}>NÃO</option>
-          </select>
-        </div>
-      </div>
-      {% endif %}
-
-      <div class="actions">
-        <button type="submit" class="btn btn-red">Salvar</button>
-        <a href="{{ url_for('usuarios') }}" class="btn btn-dark">Voltar</a>
-      </div>
-    </form>
+    </div>
   </div>
-</body>
-</html>
+</div>
+
+{% endblock %}

@@ -1,67 +1,506 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8">
-  <title>Usuários</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body{margin:0;font-family:Arial, Helvetica, sans-serif;background:#f4f5f7;padding:30px;}
-    .card{background:#fff;border-radius:20px;padding:22px;box-shadow:0 10px 24px rgba(0,0,0,.08);}
-    .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
-    .btn{border:none;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;}
-    .btn-red{background:#d40511;color:#fff;}
-    .btn-dark{background:#2f343a;color:#fff;}
-    table{width:100%;border-collapse:collapse;background:#fff;}
-    th,td{padding:12px;border-bottom:1px solid #e5e7eb;text-align:left;}
-    th{background:#ffcc00;}
-    .inline{display:inline;}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="top">
-      <h1>Usuários</h1>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <a href="{{ url_for('novo_usuario') }}" class="btn btn-red">Novo usuário</a>
-        <a href="{{ url_for('index') }}" class="btn btn-dark">Voltar</a>
+{% extends "base.html" %}
+
+{% block title %}Usuários | Livro de Ocorrência{% endblock %}
+
+{% block body %}
+
+<style>
+  :root{
+    --dhl-yellow:#ffcc00;
+    --dhl-red:#d40511;
+    --dhl-red-dark:#b3030e;
+    --dhl-black:#1f1f1f;
+    --bg:#f4f5f7;
+    --card:#ffffff;
+    --line:#e5e7eb;
+    --text:#1f2937;
+    --muted:#6b7280;
+    --shadow:0 12px 30px rgba(0,0,0,.10);
+    --radius:20px;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    background:var(--bg);
+  }
+
+  .page-wrap{
+    width:100%;
+    max-width:1400px;
+    margin:0 auto;
+    padding:24px;
+  }
+
+  .main-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+
+  .hero{
+    position:relative;
+    padding:26px 28px 20px 28px;
+    background:
+      linear-gradient(135deg, rgba(255,204,0,.20), rgba(255,255,255,1) 42%),
+      linear-gradient(90deg, #fff 0%, #fff 100%);
+    border-bottom:1px solid var(--line);
+  }
+
+  .hero::before{
+    content:"";
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:6px;
+    background:linear-gradient(90deg, var(--dhl-red) 0 78%, var(--dhl-yellow) 78% 100%);
+  }
+
+  .hero-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+
+  .hero-title-wrap{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+
+  .hero-kicker{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    width:max-content;
+    padding:7px 12px;
+    border-radius:999px;
+    background:#fff7cc;
+    color:#7a5d00;
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    border:1px solid #ffe58f;
+  }
+
+  .hero h1{
+    margin:0;
+    font-size:30px;
+    line-height:1.1;
+    color:var(--dhl-black);
+    font-weight:900;
+    letter-spacing:.2px;
+  }
+
+  .hero p{
+    margin:0;
+    color:var(--muted);
+    font-size:14px;
+    max-width:780px;
+  }
+
+  .hero-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .btn{
+    appearance:none;
+    border:none;
+    text-decoration:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-height:44px;
+    padding:0 16px;
+    border-radius:12px;
+    font-weight:800;
+    font-size:14px;
+    cursor:pointer;
+    transition:.18s ease;
+    box-shadow:0 6px 16px rgba(0,0,0,.08);
+  }
+
+  .btn:hover{
+    transform:translateY(-1px);
+  }
+
+  .btn-red{
+    background:linear-gradient(180deg, var(--dhl-red), var(--dhl-red-dark));
+    color:#fff;
+  }
+
+  .btn-dark{
+    background:#2f343a;
+    color:#fff;
+  }
+
+  .btn-light{
+    background:#fff;
+    color:var(--text);
+    border:1px solid var(--line);
+    box-shadow:none;
+  }
+
+  .content{
+    padding:24px 28px 28px 28px;
+  }
+
+  .summary-bar{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:14px;
+    margin-bottom:20px;
+  }
+
+  .summary-card{
+    background:#fafafa;
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:16px 18px;
+  }
+
+  .summary-label{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    color:var(--muted);
+    font-weight:800;
+    margin-bottom:6px;
+  }
+
+  .summary-value{
+    font-size:24px;
+    font-weight:900;
+    color:var(--dhl-black);
+    line-height:1;
+  }
+
+  .table-card{
+    border:1px solid var(--line);
+    border-radius:18px;
+    overflow:hidden;
+    background:#fff;
+  }
+
+  .table-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:16px 18px;
+    border-bottom:1px solid var(--line);
+    background:#fcfcfd;
+  }
+
+  .table-title{
+    margin:0;
+    font-size:16px;
+    font-weight:900;
+    color:var(--text);
+  }
+
+  .table-subtitle{
+    margin:4px 0 0 0;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  .table-wrap{
+    width:100%;
+    overflow:auto;
+  }
+
+  table{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+    min-width:980px;
+  }
+
+  thead th{
+    background:var(--dhl-yellow);
+    color:#111;
+    font-size:13px;
+    font-weight:900;
+    text-align:left;
+    padding:14px 12px;
+    border-bottom:1px solid #e0b800;
+    white-space:nowrap;
+  }
+
+  tbody td{
+    padding:13px 12px;
+    border-bottom:1px solid var(--line);
+    color:var(--text);
+    font-size:14px;
+    vertical-align:middle;
+  }
+
+  tbody tr:nth-child(even){
+    background:#fffdf5;
+  }
+
+  tbody tr:hover{
+    background:#fff8db;
+  }
+
+  .id-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:38px;
+    height:28px;
+    padding:0 10px;
+    border-radius:999px;
+    background:#111827;
+    color:#fff;
+    font-weight:800;
+    font-size:12px;
+  }
+
+  .role-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:6px 10px;
+    border-radius:999px;
+    background:#eef2f7;
+    color:#344054;
+    font-weight:800;
+    font-size:12px;
+    white-space:nowrap;
+  }
+
+  .site-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:6px 10px;
+    border-radius:999px;
+    background:#fff4db;
+    color:#9a6700;
+    font-weight:800;
+    font-size:12px;
+    white-space:nowrap;
+  }
+
+  .status-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:6px 10px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:12px;
+    letter-spacing:.02em;
+    white-space:nowrap;
+  }
+
+  .status-on{
+    background:#e8f7ee;
+    color:#146c43;
+  }
+
+  .status-off{
+    background:#fde8ea;
+    color:#b42318;
+  }
+
+  .actions{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+
+  .btn-table{
+    min-height:36px;
+    padding:0 12px;
+    font-size:13px;
+    border-radius:10px;
+    box-shadow:none;
+  }
+
+  .empty-state{
+    padding:30px 16px;
+    text-align:center;
+    color:var(--muted);
+    font-weight:700;
+  }
+
+  .logo-top{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+
+  .logo-top img{
+    height:52px;
+    width:auto;
+    object-fit:contain;
+  }
+
+  .logo-top .logo-text{
+    display:flex;
+    flex-direction:column;
+    line-height:1.1;
+  }
+
+  .logo-top .logo-text strong{
+    font-size:15px;
+    color:var(--dhl-black);
+  }
+
+  .logo-top .logo-text span{
+    font-size:12px;
+    color:var(--muted);
+    font-weight:700;
+  }
+
+  @media (max-width: 768px){
+    .page-wrap{
+      padding:14px;
+    }
+
+    .hero,
+    .content{
+      padding:18px;
+    }
+
+    .hero h1{
+      font-size:24px;
+    }
+
+    .btn{
+      width:100%;
+    }
+
+    .hero-actions{
+      width:100%;
+    }
+
+    .hero-actions a,
+    .hero-actions button{
+      flex:1 1 100%;
+    }
+  }
+</style>
+
+<div class="page-wrap">
+  <div class="main-card">
+
+    <div class="hero">
+      <div class="hero-top">
+        <div class="hero-title-wrap">
+          <div class="logo-top">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo DHL">
+            <div class="logo-text">
+              <strong>DHL Security</strong>
+              <span>Gestão de usuários do sistema</span>
+            </div>
+          </div>
+
+          <span class="hero-kicker">Administração • Controle de acesso</span>
+
+          <h1>Usuários</h1>
+          <p>
+            Gerencie os usuários cadastrados no sistema, edite perfis, valide permissões
+            e mantenha o controle de acessos de forma centralizada e profissional.
+          </p>
+        </div>
+
+        <div class="hero-actions">
+          <a href="{{ url_for('novo_usuario') }}" class="btn btn-red">Novo usuário</a>
+          <a href="{{ url_for('index') }}" class="btn btn-dark">Voltar</a>
+        </div>
       </div>
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Nome</th>
-          <th>E-mail</th>
-          <th>Perfil</th>
-          <th>Site</th>
-          <th>Ativo</th>
-          <th>Ações</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in usuarios %}
-        <tr>
-          <td>{{ u.id }}</td>
-          <td>{{ u.nome }}</td>
-          <td>{{ u.email }}</td>
-          <td>{{ u.role }}</td>
-          <td>{{ u.site or '-' }}</td>
-          <td>{{ 'SIM' if u.is_active else 'NÃO' }}</td>
-          <td>
-            <a href="{{ url_for('editar_usuario', user_id=u.id) }}" class="btn btn-dark">Editar</a>
-            <form method="POST" action="{{ url_for('excluir_usuario', user_id=u.id) }}" class="inline" onsubmit="return confirm('Deseja excluir este usuário?');">
-              <button type="submit" class="btn btn-red">Excluir</button>
-            </form>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="7">Nenhum usuário cadastrado.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="content">
+
+      <div class="summary-bar">
+        <div class="summary-card">
+          <div class="summary-label">Total de usuários</div>
+          <div class="summary-value">{{ usuarios|length }}</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <div>
+            <h2 class="table-title">Lista de usuários cadastrados</h2>
+            <p class="table-subtitle">
+              Visualização completa dos perfis, sites vinculados e status de acesso.
+            </p>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>Perfil</th>
+                <th>Site</th>
+                <th>Ativo</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in usuarios %}
+              <tr>
+                <td><span class="id-badge">#{{ u.id }}</span></td>
+                <td><strong>{{ u.nome }}</strong></td>
+                <td>{{ u.email }}</td>
+                <td><span class="role-badge">{{ u.role }}</span></td>
+                <td><span class="site-badge">{{ u.site or '-' }}</span></td>
+                <td>
+                  {% if u.is_active %}
+                    <span class="status-badge status-on">SIM</span>
+                  {% else %}
+                    <span class="status-badge status-off">NÃO</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="actions">
+                    <a href="{{ url_for('editar_usuario', user_id=u.id) }}" class="btn btn-dark btn-table">Editar</a>
+                    <form method="POST"
+                          action="{{ url_for('excluir_usuario', user_id=u.id) }}"
+                          style="display:inline;"
+                          onsubmit="return confirm('Deseja excluir este usuário?');">
+                      <button type="submit" class="btn btn-red btn-table">Excluir</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="7">
+                  <div class="empty-state">
+                    Nenhum usuário cadastrado.
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
   </div>
-</body>
-</html>
+</div>
+
+{% endblock %}
