@@ -841,6 +841,26 @@ def export_ocorrencias_excel():
 # =========================
 # EXPORTAÇÃO PDF INDIVIDUAL
 # =========================
+from io import BytesIO
+from datetime import datetime
+import os
+
+from flask import send_file
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+    Image,
+    KeepTogether
+)
+
 @app.route("/ocorrencias/<int:ocorrencia_id>/pdf")
 @login_required
 def export_ocorrencia_individual_pdf(ocorrencia_id):
@@ -850,22 +870,90 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
     doc = SimpleDocTemplate(
         output,
         pagesize=A4,
-        leftMargin=15 * mm,
-        rightMargin=15 * mm,
-        topMargin=15 * mm,
-        bottomMargin=15 * mm
+        leftMargin=14 * mm,
+        rightMargin=14 * mm,
+        topMargin=24 * mm,
+        bottomMargin=16 * mm
     )
 
     styles = getSampleStyleSheet()
 
+    # =========================
+    # HELPERS
+    # =========================
+    def v(valor, default="-"):
+        if valor is None:
+            return default
+        valor = str(valor).strip()
+        return pdf_safe(valor) if valor else default
+
+    def dt(valor, fmt="%d/%m/%Y %H:%M"):
+        return valor.strftime(fmt) if valor else "-"
+
+    def prioridade_cfg(prioridade):
+        p = (prioridade or "").strip().lower()
+        if p in ["alta", "critica", "crítica"]:
+            return {
+                "bg": colors.HexColor("#FDECEC"),
+                "fg": colors.HexColor("#B42318"),
+                "label": v(prioridade)
+            }
+        elif p in ["média", "media"]:
+            return {
+                "bg": colors.HexColor("#FFF4DB"),
+                "fg": colors.HexColor("#9A6700"),
+                "label": v(prioridade)
+            }
+        elif p in ["baixa"]:
+            return {
+                "bg": colors.HexColor("#EAF4FF"),
+                "fg": colors.HexColor("#175CD3"),
+                "label": v(prioridade)
+            }
+        return {
+            "bg": colors.HexColor("#F3F4F6"),
+            "fg": colors.HexColor("#374151"),
+            "label": v(prioridade)
+        }
+
+    def status_cfg(status):
+        s = (status or "").strip().lower()
+        if s in ["concluída", "concluida", "fechada", "finalizada"]:
+            return {
+                "bg": colors.HexColor("#E8F7EE"),
+                "fg": colors.HexColor("#146C43"),
+                "label": v(status)
+            }
+        elif s in ["aberta", "pendente", "em andamento"]:
+            return {
+                "bg": colors.HexColor("#FFF4DB"),
+                "fg": colors.HexColor("#9A6700"),
+                "label": v(status)
+            }
+        elif s in ["crítica", "critica", "atrasada"]:
+            return {
+                "bg": colors.HexColor("#FDE8EA"),
+                "fg": colors.HexColor("#B42318"),
+                "label": v(status)
+            }
+        return {
+            "bg": colors.HexColor("#EEF2F6"),
+            "fg": colors.HexColor("#344054"),
+            "label": v(status)
+        }
+
+    # =========================
+    # ESTILOS
+    # =========================
     title_style = ParagraphStyle(
         "TituloDHL",
         parent=styles["Heading1"],
         fontName="Helvetica-Bold",
-        fontSize=18,
+        fontSize=20,
+        leading=24,
         textColor=colors.HexColor("#D40511"),
-        spaceAfter=6,
-        leading=22,
+        alignment=TA_LEFT,
+        spaceAfter=4,
     )
 
     subtitle_style = ParagraphStyle(
@@ -873,17 +961,49 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         parent=styles["Normal"],
         fontName="Helvetica",
         fontSize=9,
-        textColor=colors.HexColor("#555555"),
-        spaceAfter=10,
+        leading=12,
+        textColor=colors.HexColor("#667085"),
+        alignment=TA_LEFT,
+        spaceAfter=8,
+    )
+
+    section_title_style = ParagraphStyle(
+        "SectionTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        leading=12,
+        textColor=colors.white,
+        alignment=TA_LEFT,
     )
 
     label_style = ParagraphStyle(
         "Label",
         parent=styles["Normal"],
         fontName="Helvetica-Bold",
-        fontSize=10,
-        textColor=colors.HexColor("#111111"),
-        spaceAfter=2,
+        fontSize=9,
+        leading=11,
+        textColor=colors.HexColor("#111827"),
+        spaceAfter=1,
+    )
+
+    value_style = ParagraphStyle(
+        "Value",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9,
+        leading=11,
+        textColor=colors.HexColor("#344054"),
+    )
+
+    block_title_style = ParagraphStyle(
+        "BlockTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=13,
+        textColor=colors.HexColor("#111827"),
+        spaceAfter=6,
     )
 
     text_style = ParagraphStyle(
@@ -891,73 +1011,299 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         parent=styles["Normal"],
         fontName="Helvetica",
         fontSize=10,
-        leading=14,
-        spaceAfter=8,
+        leading=15,
         textColor=colors.HexColor("#333333"),
+        spaceAfter=0,
     )
 
-    box_style = TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#E0C24D")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#F0E0A0")),
+    badge_center_style = ParagraphStyle(
+        "BadgeCenter",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        leading=12,
+        alignment=TA_CENTER,
+    )
+
+    kpi_number_style = ParagraphStyle(
+        "KPINumber",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=18,
+        leading=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#111111"),
+    )
+
+    kpi_label_style = ParagraphStyle(
+        "KPILabel",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=10,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#6B7280"),
+    )
+
+    footer_style = ParagraphStyle(
+        "FooterStyle",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        textColor=colors.HexColor("#6B7280"),
+        alignment=TA_RIGHT,
+    )
+
+    # =========================
+    # HEADER / FOOTER
+    # =========================
+    def draw_header_footer(canvas, doc):
+        canvas.saveState()
+        width, height = A4
+
+        # Barra superior vermelha
+        canvas.setFillColor(colors.HexColor("#D40511"))
+        canvas.rect(0, height - 14 * mm, width, 14 * mm, fill=1, stroke=0)
+
+        # Faixa amarela
+        canvas.setFillColor(colors.HexColor("#FFCC00"))
+        canvas.rect(0, height - 16 * mm, width, 2 * mm, fill=1, stroke=0)
+
+        # Texto cabeçalho
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 11)
+        canvas.drawString(14 * mm, height - 9 * mm, "DHL SECURITY")
+
+        canvas.setFont("Helvetica", 8)
+        canvas.drawRightString(
+            width - 14 * mm,
+            height - 9 * mm,
+            f"Documento emitido em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        )
+
+        # Rodapé
+        canvas.setStrokeColor(colors.HexColor("#D0D5DD"))
+        canvas.setLineWidth(0.4)
+        canvas.line(14 * mm, 11 * mm, width - 14 * mm, 11 * mm)
+
+        canvas.setFillColor(colors.HexColor("#667085"))
+        canvas.setFont("Helvetica", 8)
+        canvas.drawString(14 * mm, 7 * mm, "Livro de Ocorrência • Relatório Individual")
+        canvas.drawRightString(width - 14 * mm, 7 * mm, f"Página {canvas.getPageNumber()}")
+
+        canvas.restoreState()
+
+    # =========================
+    # ELEMENTOS
+    # =========================
+    elementos = []
+
+    # Logo
+    # Troque o nome do arquivo abaixo se seu logotipo estiver com outro nome.
+    possiveis_logos = [
+        os.path.join(app.static_folder, "logo.png"),
+        os.path.join(app.static_folder, "logo.jpg"),
+        os.path.join(app.static_folder, "logo.jpeg"),
+        os.path.join(app.static_folder, "logo_dhl.png"),
+        os.path.join(app.static_folder, "leroy_secu.png"),
+    ]
+
+    logo_path = next((p for p in possiveis_logos if os.path.exists(p)), None)
+    if logo_path:
+        try:
+            logo = Image(logo_path, width=42 * mm, height=16 * mm)
+            elementos.append(logo)
+            elementos.append(Spacer(1, 6))
+        except Exception:
+            pass
+
+    # Título
+    elementos.append(Paragraph("RELATÓRIO INDIVIDUAL DE OCORRÊNCIA", title_style))
+    elementos.append(Paragraph(
+        "Documento detalhado com as informações completas do registro operacional.",
+        subtitle_style
+    ))
+    elementos.append(Spacer(1, 4))
+
+    # =========================
+    # KPIs SUPERIORES
+    # =========================
+    prio = prioridade_cfg(ocorrencia.prioridade)
+    stat = status_cfg(ocorrencia.status)
+
+    card_id = Table([
+        [Paragraph(f"#{ocorrencia.id}", kpi_number_style)],
+        [Paragraph("ID DA OCORRÊNCIA", kpi_label_style)]
+    ], colWidths=[44 * mm])
+
+    card_id.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF8DB")),
+        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#FFCC00")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+    ]))
+
+    card_status = Table([
+        [Paragraph(f'<font color="{stat["fg"]}"><b>{stat["label"]}</b></font>', badge_center_style)],
+        [Paragraph("STATUS", kpi_label_style)]
+    ], colWidths=[52 * mm])
+
+    card_status.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), stat["bg"]),
+        ("BACKGROUND", (0, 1), (0, 1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#D0D5DD")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+    ]))
+
+    card_prio = Table([
+        [Paragraph(f'<font color="{prio["fg"]}"><b>{prio["label"]}</b></font>', badge_center_style)],
+        [Paragraph("PRIORIDADE", kpi_label_style)]
+    ], colWidths=[52 * mm])
+
+    card_prio.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), prio["bg"]),
+        ("BACKGROUND", (0, 1), (0, 1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#D0D5DD")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+    ]))
+
+    resumo_topo = Table(
+        [[card_id, card_status, card_prio]],
+        colWidths=[48 * mm, 58 * mm, 58 * mm]
+    )
+    resumo_topo.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+
+    elementos.append(KeepTogether(resumo_topo))
+    elementos.append(Spacer(1, 10))
+
+    # =========================
+    # BLOCO DADOS GERAIS
+    # =========================
+    dados_principais = [
+        [Paragraph("<b>Data da ocorrência</b>", label_style), Paragraph(v(dt(ocorrencia.data_ocorrencia, "%d/%m/%Y")), value_style)],
+        [Paragraph("<b>Data/Hora do registro</b>", label_style), Paragraph(v(dt(ocorrencia.data_hora_registro)), value_style)],
+        [Paragraph("<b>Site</b>", label_style), Paragraph(v(ocorrencia.site), value_style)],
+        [Paragraph("<b>Turno</b>", label_style), Paragraph(v(ocorrencia.turno), value_style)],
+        [Paragraph("<b>Setor</b>", label_style), Paragraph(v(ocorrencia.setor), value_style)],
+        [Paragraph("<b>Tipo de ocorrência</b>", label_style), Paragraph(v(ocorrencia.tipo_ocorrencia), value_style)],
+        [Paragraph("<b>Responsável saída</b>", label_style), Paragraph(v(ocorrencia.responsavel_saida), value_style)],
+        [Paragraph("<b>Responsável entrada</b>", label_style), Paragraph(v(ocorrencia.responsavel_entrada), value_style)],
+        [Paragraph("<b>Criado por</b>", label_style), Paragraph(v(ocorrencia.criado_por), value_style)],
+        [Paragraph("<b>Criado em</b>", label_style), Paragraph(v(dt(ocorrencia.created_at)), value_style)],
+        [Paragraph("<b>Atualizado em</b>", label_style), Paragraph(v(dt(ocorrencia.updated_at)), value_style)],
+    ]
+
+    cabecalho_info = Table(
+        [[Paragraph("DADOS GERAIS DA OCORRÊNCIA", section_title_style)]],
+        colWidths=[182 * mm]
+    )
+    cabecalho_info.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#D40511")),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+
+    tabela_info = Table(dados_principais, colWidths=[58 * mm, 124 * mm])
+    tabela_info.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, colors.HexColor("#FAFAFA")]),
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#D0D5DD")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#EAECF0")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ])
+    ]))
 
-    elementos = []
-
-    logo_path = os.path.join(app.static_folder, "logo.png")
-    if os.path.exists(logo_path):
-        logo = Image(logo_path, width=40 * mm, height=15 * mm)
-        elementos.append(logo)
-        elementos.append(Spacer(1, 5))
-
-    elementos.append(Paragraph("DHL SECURITY - OCORRÊNCIA INDIVIDUAL", title_style))
-    elementos.append(Paragraph("Relatório detalhado da ocorrência registrada", subtitle_style))
-
-    dados_principais = [
-        ["ID da ocorrência", f"#{ocorrencia.id}"],
-        ["Data da ocorrência", ocorrencia.data_ocorrencia.strftime("%d/%m/%Y") if ocorrencia.data_ocorrencia else "-"],
-        ["Data/Hora do registro", ocorrencia.data_hora_registro.strftime("%d/%m/%Y %H:%M") if ocorrencia.data_hora_registro else "-"],
-        ["Site", ocorrencia.site or "-"],
-        ["Turno", ocorrencia.turno or "-"],
-        ["Setor", ocorrencia.setor or "-"],
-        ["Tipo de ocorrência", ocorrencia.tipo_ocorrencia or "-"],
-        ["Prioridade", ocorrencia.prioridade or "-"],
-        ["Status", ocorrencia.status or "-"],
-        ["Responsável saída", ocorrencia.responsavel_saida or "-"],
-        ["Responsável entrada", ocorrencia.responsavel_entrada or "-"],
-        ["Criado por", ocorrencia.criado_por or "-"],
-        ["Criado em", ocorrencia.created_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.created_at else "-"],
-        ["Atualizado em", ocorrencia.updated_at.strftime("%d/%m/%Y %H:%M") if ocorrencia.updated_at else "-"],
-    ]
-
-    tabela_info = Table(dados_principais, colWidths=[50 * mm, 120 * mm])
-    tabela_info.setStyle(box_style)
+    elementos.append(KeepTogether(cabecalho_info))
     elementos.append(tabela_info)
-    elementos.append(Spacer(1, 10))
+    elementos.append(Spacer(1, 12))
 
-    elementos.append(Paragraph("Descrição:", label_style))
-    elementos.append(Paragraph(pdf_safe(ocorrencia.descricao), text_style))
-
-    elementos.append(Paragraph("Ações tomadas:", label_style))
-    elementos.append(Paragraph(pdf_safe(ocorrencia.acoes_tomadas), text_style))
-
-    elementos.append(Paragraph("Pendências:", label_style))
-    elementos.append(Paragraph(pdf_safe(ocorrencia.pendencias), text_style))
-
-    elementos.append(Spacer(1, 8))
-    elementos.append(
-        Paragraph(
-            f"Documento gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}",
-            subtitle_style
+    # =========================
+    # SEÇÕES TEXTUAIS
+    # =========================
+    def bloco_texto(titulo, conteudo):
+        cab = Table(
+            [[Paragraph(titulo, section_title_style)]],
+            colWidths=[182 * mm]
         )
-    )
+        cab.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#111827")),
+            ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
 
-    doc.build(elementos)
+        corpo = Table(
+            [[Paragraph(v(conteudo), text_style)]],
+            colWidths=[182 * mm]
+        )
+        corpo.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#D0D5DD")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ]))
+
+        return [KeepTogether(cab), corpo, Spacer(1, 10)]
+
+    elementos.extend(bloco_texto("DESCRIÇÃO DA OCORRÊNCIA", ocorrencia.descricao))
+    elementos.extend(bloco_texto("AÇÕES TOMADAS", ocorrencia.acoes_tomadas))
+    elementos.extend(bloco_texto("PENDÊNCIAS", ocorrencia.pendencias))
+
+    # =========================
+    # BLOCO FINAL
+    # =========================
+    emissao = Table(
+        [[Paragraph(
+            f"Documento gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}",
+            footer_style
+        )]],
+        colWidths=[182 * mm]
+    )
+    emissao.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F9FAFB")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elementos.append(emissao)
+
+    # =========================
+    # BUILD
+    # =========================
+    doc.build(
+        elementos,
+        onFirstPage=draw_header_footer,
+        onLaterPages=draw_header_footer
+    )
 
     output.seek(0)
     nome_arquivo = f"ocorrencia_{ocorrencia.id}.pdf"
@@ -969,10 +1315,27 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         mimetype="application/pdf"
     )
 
-
 # =========================
 # EXPORTAÇÃO PDF GERAL
 # =========================
+from io import BytesIO
+from datetime import datetime
+
+from flask import send_file
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+    KeepTogether
+)
+
 @app.route("/export-ocorrencias-pdf")
 @login_required
 def export_ocorrencias_pdf():
@@ -985,84 +1348,381 @@ def export_ocorrencias_pdf():
         pagesize=landscape(A4),
         leftMargin=10 * mm,
         rightMargin=10 * mm,
-        topMargin=10 * mm,
-        bottomMargin=10 * mm
+        topMargin=18 * mm,
+        bottomMargin=14 * mm
     )
 
     styles = getSampleStyleSheet()
+
+    # =========================
+    # ESTILOS
+    # =========================
     title_style = ParagraphStyle(
         "DHLTitle",
         parent=styles["Heading1"],
         fontName="Helvetica-Bold",
-        fontSize=18,
+        fontSize=19,
+        leading=22,
         textColor=colors.HexColor("#D40511"),
+        alignment=TA_LEFT,
+        spaceAfter=4,
+    )
+
+    subtitle_style = ParagraphStyle(
+        "DHLSubTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor("#444444"),
+        alignment=TA_LEFT,
         spaceAfter=8,
     )
+
+    section_label_style = ParagraphStyle(
+        "SectionLabel",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        leading=11,
+        textColor=colors.white,
+        alignment=TA_LEFT,
+    )
+
+    info_style = ParagraphStyle(
+        "InfoStyle",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor("#333333"),
+        alignment=TA_LEFT,
+    )
+
     small_style = ParagraphStyle(
         "Small",
         parent=styles["Normal"],
         fontName="Helvetica",
         fontSize=8,
         leading=10,
+        textColor=colors.HexColor("#4B5563"),
     )
 
+    cell_style = ParagraphStyle(
+        "CellStyle",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7.6,
+        leading=9,
+        textColor=colors.HexColor("#1F2937"),
+    )
+
+    cell_bold_style = ParagraphStyle(
+        "CellBoldStyle",
+        parent=cell_style,
+        fontName="Helvetica-Bold",
+    )
+
+    kpi_value_style = ParagraphStyle(
+        "KPIValue",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=16,
+        leading=18,
+        textColor=colors.HexColor("#111111"),
+        alignment=TA_CENTER,
+    )
+
+    kpi_label_style = ParagraphStyle(
+        "KPILabel",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor("#6B7280"),
+        alignment=TA_CENTER,
+    )
+
+    # =========================
+    # HELPERS
+    # =========================
+    def valor_seguro(v):
+        return pdf_safe(str(v)) if v not in (None, "", "None") else "-"
+
+    def prioridade_badge(prioridade):
+        p = (prioridade or "").strip().lower()
+        if p in ["alta", "crítica", "critica"]:
+            bg = "#FDECEC"
+            fg = "#B42318"
+        elif p in ["média", "media"]:
+            bg = "#FFF4DB"
+            fg = "#9A6700"
+        elif p in ["baixa"]:
+            bg = "#EAF4FF"
+            fg = "#175CD3"
+        else:
+            bg = "#F3F4F6"
+            fg = "#374151"
+
+        return Paragraph(
+            f"""<para align="center">
+                <font color="{fg}">
+                    <b>{valor_seguro(prioridade)}</b>
+                </font>
+            </para>""",
+            ParagraphStyle(
+                "badge_prio",
+                parent=cell_style,
+                backColor=colors.HexColor(bg),
+                borderPadding=(3, 5, 3),
+                alignment=TA_CENTER
+            )
+        )
+
+    def status_badge(status):
+        s = (status or "").strip().lower()
+        if s in ["concluída", "concluida", "fechada", "finalizada"]:
+            bg = "#E8F7EE"
+            fg = "#146C43"
+        elif s in ["em andamento", "pendente", "aberta"]:
+            bg = "#FFF4DB"
+            fg = "#9A6700"
+        elif s in ["crítica", "critica", "atrasada"]:
+            bg = "#FDE8EA"
+            fg = "#B42318"
+        else:
+            bg = "#EEF2F6"
+            fg = "#344054"
+
+        return Paragraph(
+            f"""<para align="center">
+                <font color="{fg}">
+                    <b>{valor_seguro(status)}</b>
+                </font>
+            </para>""",
+            ParagraphStyle(
+                "badge_status",
+                parent=cell_style,
+                backColor=colors.HexColor(bg),
+                borderPadding=(3, 5, 3),
+                alignment=TA_CENTER
+            )
+        )
+
+    def p(txt, style=cell_style):
+        return Paragraph(valor_seguro(txt), style)
+
+    def draw_header_footer(canvas, doc):
+        canvas.saveState()
+
+        page_width, page_height = landscape(A4)
+
+        # Barra superior vermelha
+        canvas.setFillColor(colors.HexColor("#D40511"))
+        canvas.rect(0, page_height - 12 * mm, page_width, 12 * mm, fill=1, stroke=0)
+
+        # Faixa fina amarela abaixo
+        canvas.setFillColor(colors.HexColor("#FFCC00"))
+        canvas.rect(0, page_height - 14 * mm, page_width, 2 * mm, fill=1, stroke=0)
+
+        # Cabeçalho
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 11)
+        canvas.drawString(12 * mm, page_height - 8.2 * mm, "DHL SECURITY")
+
+        canvas.setFont("Helvetica", 8)
+        canvas.drawRightString(
+            page_width - 12 * mm,
+            page_height - 8.2 * mm,
+            f"Relatório gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        )
+
+        # Rodapé
+        canvas.setStrokeColor(colors.HexColor("#D1D5DB"))
+        canvas.setLineWidth(0.4)
+        canvas.line(10 * mm, 10 * mm, page_width - 10 * mm, 10 * mm)
+
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#6B7280"))
+        canvas.drawString(10 * mm, 6 * mm, "Livro de Ocorrência • Passagem de Turno")
+        canvas.drawRightString(page_width - 10 * mm, 6 * mm, f"Página {canvas.getPageNumber()}")
+
+        canvas.restoreState()
+
+    # =========================
+    # CONTEÚDO
+    # =========================
     elementos = []
-    elementos.append(Paragraph("DHL SECURITY - LIVRO DE OCORRÊNCIA DE PASSAGEM DE TURNO", title_style))
 
-    filtro_txt = (
-        f"Filtros aplicados | Data inicial: {filtros['data_inicial'] or '-'} | "
-        f"Data final: {filtros['data_final'] or '-'} | Turno: {filtros['turno'] or '-'} | "
-        f"Status: {filtros['status'] or '-'} | Site: {filtros['site'] or '-'}"
+    elementos.append(Paragraph("LIVRO DE OCORRÊNCIAS DE PASSAGEM DE TURNO", title_style))
+    elementos.append(Paragraph(
+        "Relatório corporativo consolidado das ocorrências registradas no sistema.",
+        subtitle_style
+    ))
+    elementos.append(Spacer(1, 4))
+
+    # Bloco de filtros
+    filtros_data = [
+        ["Data inicial", valor_seguro(filtros.get("data_inicial"))],
+        ["Data final", valor_seguro(filtros.get("data_final"))],
+        ["Turno", valor_seguro(filtros.get("turno"))],
+        ["Status", valor_seguro(filtros.get("status"))],
+        ["Site", valor_seguro(filtros.get("site"))],
+    ]
+
+    filtro_table = Table(
+        [[Paragraph("<b>FILTROS APLICADOS</b>", section_label_style), ""]] +
+        [[Paragraph(f"<b>{k}</b>", info_style), Paragraph(v, info_style)] for k, v in filtros_data],
+        colWidths=[45 * mm, 95 * mm]
     )
-    elementos.append(Paragraph(pdf_safe(filtro_txt), small_style))
-    elementos.append(Spacer(1, 6))
+    filtro_table.setStyle(TableStyle([
+        ("SPAN", (0, 0), (1, 0)),
+        ("BACKGROUND", (0, 0), (1, 0), colors.HexColor("#D40511")),
+        ("TEXTCOLOR", (0, 0), (1, 0), colors.white),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#FAFAFA")),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#D1D5DB")),
+        ("INNERGRID", (0, 1), (-1, -1), 0.35, colors.HexColor("#E5E7EB")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
 
+    # KPI
+    total_ocorrencias = len(rows)
+
+    kpi_table = Table([
+        [Paragraph(str(total_ocorrencias), kpi_value_style)],
+        [Paragraph("TOTAL DE OCORRÊNCIAS", kpi_label_style)]
+    ], colWidths=[42 * mm])
+
+    kpi_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF8DB")),
+        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#FFCC00")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+
+    resumo_bloco = Table(
+        [[filtro_table, kpi_table]],
+        colWidths=[145 * mm, 50 * mm]
+    )
+    resumo_bloco.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+
+    elementos.append(KeepTogether(resumo_bloco))
+    elementos.append(Spacer(1, 10))
+
+    # =========================
+    # TABELA PRINCIPAL
+    # =========================
     data = [[
-        "ID", "Data/Hora", "Site", "Turno", "Setor", "Tipo",
-        "Prioridade", "Status", "Resp. Saída", "Resp. Entrada"
+        Paragraph("<b>ID</b>", cell_bold_style),
+        Paragraph("<b>DATA / HORA</b>", cell_bold_style),
+        Paragraph("<b>SITE</b>", cell_bold_style),
+        Paragraph("<b>TURNO</b>", cell_bold_style),
+        Paragraph("<b>SETOR</b>", cell_bold_style),
+        Paragraph("<b>TIPO</b>", cell_bold_style),
+        Paragraph("<b>PRIORIDADE</b>", cell_bold_style),
+        Paragraph("<b>STATUS</b>", cell_bold_style),
+        Paragraph("<b>RESP. SAÍDA</b>", cell_bold_style),
+        Paragraph("<b>RESP. ENTRADA</b>", cell_bold_style),
     ]]
 
     for r in rows:
         data.append([
-            str(r.id),
-            r.data_hora_registro.strftime("%d/%m/%Y %H:%M") if r.data_hora_registro else "",
-            r.site,
-            r.turno,
-            r.setor,
-            r.tipo_ocorrencia,
-            r.prioridade,
-            r.status,
-            r.responsavel_saida,
-            r.responsavel_entrada,
+            p(r.id),
+            p(r.data_hora_registro.strftime("%d/%m/%Y %H:%M") if r.data_hora_registro else "-"),
+            p(r.site),
+            p(r.turno),
+            p(r.setor),
+            p(r.tipo_ocorrencia),
+            prioridade_badge(r.prioridade),
+            status_badge(r.status),
+            p(r.responsavel_saida),
+            p(r.responsavel_entrada),
         ])
 
-    tabela = Table(data, repeatRows=1)
+    tabela = Table(
+        data,
+        repeatRows=1,
+        colWidths=[
+            12 * mm,   # ID
+            28 * mm,   # Data/Hora
+            23 * mm,   # Site
+            18 * mm,   # Turno
+            28 * mm,   # Setor
+            42 * mm,   # Tipo
+            26 * mm,   # Prioridade
+            30 * mm,   # Status
+            38 * mm,   # Resp Saída
+            38 * mm,   # Resp Entrada
+        ]
+    )
+
     tabela.setStyle(TableStyle([
+        # Cabeçalho
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FFCC00")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FFF9E6")]),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+        ("VALIGN", (0, 0), (-1, 0), "MIDDLE"),
+
+        # Corpo
+        ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FCFCFD")]),
+        ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#111827")),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 7.5),
+        ("VALIGN", (0, 1), (-1, -1), "MIDDLE"),
+
+        # Bordas
+        ("LINEBELOW", (0, 0), (-1, 0), 0.9, colors.HexColor("#D1A800")),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#DADDE1")),
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#C9CDD3")),
+
+        # Padding
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+
+        # Alinhamentos específicos
+        ("ALIGN", (0, 1), (0, -1), "CENTER"),   # ID
+        ("ALIGN", (1, 1), (1, -1), "CENTER"),   # Data/Hora
+        ("ALIGN", (3, 1), (3, -1), "CENTER"),   # Turno
+        ("ALIGN", (6, 1), (7, -1), "CENTER"),   # Prioridade/Status
     ]))
 
     elementos.append(tabela)
-    doc.build(elementos)
+
+    # Construção do PDF
+    doc.build(
+        elementos,
+        onFirstPage=draw_header_footer,
+        onLaterPages=draw_header_footer
+    )
 
     output.seek(0)
     nome_arquivo = f"livro_ocorrencias_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+
     return send_file(
         output,
         as_attachment=True,
         download_name=nome_arquivo,
         mimetype="application/pdf"
     )
-
 
 # =========================
 # SETUP
