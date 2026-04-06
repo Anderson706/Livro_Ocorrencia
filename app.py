@@ -1,4 +1,5 @@
 import os
+import base64
 from io import BytesIO
 from html import escape
 from datetime import datetime, date
@@ -95,6 +96,8 @@ class OcorrenciaTurno(db.Model):
     responsavel_entrada = db.Column(db.String(120), nullable=False)
 
     descricao = db.Column(db.Text, nullable=False)
+    efetivo = db.Column(db.Text, nullable=False)
+    assinatura = db.Column(db.Text, nullable=True)
     acoes_tomadas = db.Column(db.Text, nullable=True)
     pendencias = db.Column(db.Text, nullable=True)
 
@@ -117,6 +120,8 @@ class OcorrenciaTurno(db.Model):
             "responsavel_saida": self.responsavel_saida,
             "responsavel_entrada": self.responsavel_entrada,
             "descricao": self.descricao,
+            "efetivo": self.efetivo or "",
+            "assinatura": self.assinatura or "",
             "acoes_tomadas": self.acoes_tomadas or "",
             "pendencias": self.pendencias or "",
             "status": self.status,
@@ -125,6 +130,34 @@ class OcorrenciaTurno(db.Model):
             "updated_at": self.updated_at.strftime("%d/%m/%Y %H:%M") if self.updated_at else "",
         }
 
+
+def garantir_colunas_ocorrencias():
+    with db.engine.connect() as conn:
+        result = conn.execute(db.text("PRAGMA table_info(ocorrencias_turno)"))
+        colunas = {row[1] for row in result.fetchall()}
+
+        if "efetivo" not in colunas:
+            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD COLUMN efetivo TEXT"))
+
+        if "assinatura" not in colunas:
+            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD COLUMN assinatura TEXT"))
+
+        conn.commit()
+
+
+
+def garantir_colunas_ocorrencias():
+    with db.engine.connect() as conn:
+        result = conn.execute(db.text("PRAGMA table_info(ocorrencias_turno)"))
+        colunas = {row[1] for row in result.fetchall()}
+
+        if "efetivo" not in colunas:
+            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD COLUMN efetivo TEXT"))
+
+        if "assinatura" not in colunas:
+            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD COLUMN assinatura VARCHAR(120)"))
+
+        conn.commit()
 
 # =========================
 # DECORATORS
@@ -561,6 +594,8 @@ def salvar_ocorrencia_turno():
         responsavel_saida = (request.form.get("responsavel_saida") or "").strip()
         responsavel_entrada = (request.form.get("responsavel_entrada") or "").strip()
         descricao = (request.form.get("descricao") or "").strip()
+        efetivo = (request.form.get("efetivo") or "").strip()
+        assinatura = request.form.get("assinatura") or ""
         acoes_tomadas = (request.form.get("acoes_tomadas") or "").strip()
         pendencias = (request.form.get("pendencias") or "").strip()
         status = normalizar_texto(request.form.get("status"))
@@ -568,7 +603,7 @@ def salvar_ocorrencia_turno():
         if not all([
             data_ocorrencia, data_hora_registro, site, turno, setor,
             tipo_ocorrencia, prioridade, responsavel_saida,
-            responsavel_entrada, descricao, status
+            responsavel_entrada, descricao, efetivo, status
         ]):
             flash("Preencha todos os campos obrigatórios.", "danger")
             return redirect(url_for("index"))
@@ -600,6 +635,8 @@ def salvar_ocorrencia_turno():
             responsavel_saida=responsavel_saida,
             responsavel_entrada=responsavel_entrada,
             descricao=descricao,
+            efetivo=efetivo,
+            assinatura=assinatura or None,
             acoes_tomadas=acoes_tomadas or None,
             pendencias=pendencias or None,
             status=status,
@@ -635,6 +672,12 @@ def editar_ocorrencia(ocorrencia_id):
             ocorrencia.responsavel_saida = (request.form.get("responsavel_saida") or "").strip()
             ocorrencia.responsavel_entrada = (request.form.get("responsavel_entrada") or "").strip()
             ocorrencia.descricao = (request.form.get("descricao") or "").strip()
+            ocorrencia.efetivo = (request.form.get("efetivo") or "").strip()
+
+            assinatura_recebida = request.form.get("assinatura") or ""
+            if assinatura_recebida:
+                ocorrencia.assinatura = assinatura_recebida
+
             ocorrencia.acoes_tomadas = (request.form.get("acoes_tomadas") or "").strip() or None
             ocorrencia.pendencias = (request.form.get("pendencias") or "").strip() or None
             ocorrencia.status = normalizar_texto(request.form.get("status"))
@@ -644,7 +687,8 @@ def editar_ocorrencia(ocorrencia_id):
                 ocorrencia.data_ocorrencia, ocorrencia.data_hora_registro, ocorrencia.site,
                 ocorrencia.turno, ocorrencia.setor, ocorrencia.tipo_ocorrencia,
                 ocorrencia.prioridade, ocorrencia.responsavel_saida,
-                ocorrencia.responsavel_entrada, ocorrencia.descricao, ocorrencia.status
+                ocorrencia.responsavel_entrada, ocorrencia.descricao,
+                ocorrencia.efetivo, ocorrencia.status
             ]):
                 flash("Preencha todos os campos obrigatórios.", "danger")
                 return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
@@ -680,7 +724,6 @@ def editar_ocorrencia(ocorrencia_id):
         data_ocorrencia_value=format_date_input(ocorrencia.data_ocorrencia),
         data_hora_value=format_datetime_local_input(ocorrencia.data_hora_registro)
     )
-
 
 @app.route("/ocorrencias/<int:ocorrencia_id>/fechar", methods=["POST"])
 @login_required
@@ -781,7 +824,7 @@ def export_ocorrencias_excel():
     headers = [
         "ID", "Data da Ocorrência", "Data/Hora Registro", "Site", "Turno", "Setor",
         "Tipo de Ocorrência", "Prioridade", "Responsável Saída", "Responsável Entrada",
-        "Descrição", "Ações Tomadas", "Pendências", "Status",
+        "Efetivo", "Descrição", "Ações Tomadas", "Pendências", "Assinatura", "Status",
         "Criado por", "Criado em", "Atualizado em"
     ]
     ws.append(headers)
@@ -807,9 +850,11 @@ def export_ocorrencias_excel():
             r.prioridade,
             r.responsavel_saida,
             r.responsavel_entrada,
+            r.efetivo or "",
             r.descricao,
             r.acoes_tomadas or "",
             r.pendencias or "",
+            r.assinatura or "",
             r.status,
             r.criado_por or "",
             r.created_at.strftime("%d/%m/%Y %H:%M") if r.created_at else "",
@@ -839,7 +884,6 @@ def export_ocorrencias_excel():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-
 # =========================
 # EXPORTAÇÃO PDF INDIVIDUAL
 # =========================
@@ -862,6 +906,24 @@ from reportlab.platypus import (
     Image,
     KeepTogether
 )
+
+def assinatura_base64_para_image(assinatura_b64, largura_mm=60, altura_mm=22):
+    if not assinatura_b64:
+        return None
+
+    try:
+        if "," in assinatura_b64:
+            _, encoded = assinatura_b64.split(",", 1)
+        else:
+            encoded = assinatura_b64
+
+        image_bytes = base64.b64decode(encoded)
+        buffer = BytesIO(image_bytes)
+        return Image(buffer, width=largura_mm * mm, height=altura_mm * mm)
+    except Exception:
+        return None
+
+
 
 @app.route("/ocorrencias/<int:ocorrencia_id>/pdf")
 @login_required
@@ -1199,14 +1261,18 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
     # BLOCO DADOS GERAIS
     # =========================
     dados_principais = [
-        [Paragraph("<b>Data da ocorrência</b>", label_style), Paragraph(v(dt(ocorrencia.data_ocorrencia, "%d/%m/%Y")), value_style)],
-        [Paragraph("<b>Data/Hora do registro</b>", label_style), Paragraph(v(dt(ocorrencia.data_hora_registro)), value_style)],
+        [Paragraph("<b>Data da ocorrência</b>", label_style),
+         Paragraph(v(dt(ocorrencia.data_ocorrencia, "%d/%m/%Y")), value_style)],
+        [Paragraph("<b>Data/Hora do registro</b>", label_style),
+         Paragraph(v(dt(ocorrencia.data_hora_registro)), value_style)],
         [Paragraph("<b>Site</b>", label_style), Paragraph(v(ocorrencia.site), value_style)],
         [Paragraph("<b>Turno</b>", label_style), Paragraph(v(ocorrencia.turno), value_style)],
         [Paragraph("<b>Setor</b>", label_style), Paragraph(v(ocorrencia.setor), value_style)],
         [Paragraph("<b>Tipo de ocorrência</b>", label_style), Paragraph(v(ocorrencia.tipo_ocorrencia), value_style)],
         [Paragraph("<b>Responsável saída</b>", label_style), Paragraph(v(ocorrencia.responsavel_saida), value_style)],
-        [Paragraph("<b>Responsável entrada</b>", label_style), Paragraph(v(ocorrencia.responsavel_entrada), value_style)],
+        [Paragraph("<b>Responsável entrada</b>", label_style),
+         Paragraph(v(ocorrencia.responsavel_entrada), value_style)],
+        [Paragraph("<b>Efetivo</b>", label_style), Paragraph(v(ocorrencia.efetivo), value_style)],
         [Paragraph("<b>Criado por</b>", label_style), Paragraph(v(ocorrencia.criado_por), value_style)],
         [Paragraph("<b>Criado em</b>", label_style), Paragraph(v(dt(ocorrencia.created_at)), value_style)],
         [Paragraph("<b>Atualizado em</b>", label_style), Paragraph(v(dt(ocorrencia.updated_at)), value_style)],
@@ -1277,6 +1343,39 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
     elementos.extend(bloco_texto("DESCRIÇÃO DA OCORRÊNCIA", ocorrencia.descricao))
     elementos.extend(bloco_texto("AÇÕES TOMADAS", ocorrencia.acoes_tomadas))
     elementos.extend(bloco_texto("PENDÊNCIAS", ocorrencia.pendencias))
+
+    assinatura_img = assinatura_base64_para_image(ocorrencia.assinatura)
+    if assinatura_img:
+        assinatura_titulo = Table(
+            [[Paragraph("ASSINATURA", section_title_style)]],
+            colWidths=[182 * mm]
+        )
+        assinatura_titulo.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#111827")),
+            ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+
+        assinatura_corpo = Table(
+            [[assinatura_img]],
+            colWidths=[182 * mm]
+        )
+        assinatura_corpo.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#D0D5DD")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ]))
+
+        elementos.append(KeepTogether(assinatura_titulo))
+        elementos.append(assinatura_corpo)
+        elementos.append(Spacer(1, 10))
 
     # =========================
     # BLOCO FINAL

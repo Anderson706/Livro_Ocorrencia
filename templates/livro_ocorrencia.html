@@ -557,6 +557,66 @@
       display:inline;
     }
 
+    .assinatura-box{
+      margin-top:14px;
+      padding-top:14px;
+      border-top:1px dashed #d6b64c;
+    }
+
+    .assinatura-line{
+      margin-top:18px;
+      height:1px;
+      background:#5f6368;
+      width:100%;
+    }
+
+    .assinatura-label{
+      margin-top:6px;
+      font-size:12px;
+      color:#6b7280;
+      font-weight:700;
+    }
+
+    .signature-wrapper{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .signature-pad{
+      width:100%;
+      max-width:100%;
+      height:180px;
+      background:#fff;
+      border:2px dashed #d6b64c;
+      border-radius:14px;
+      display:block;
+      cursor:crosshair;
+      touch-action:none;
+      box-shadow:inset 0 2px 8px rgba(0,0,0,.04);
+    }
+
+    .signature-toolbar{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .signature-preview{
+      margin-top:10px;
+      padding:12px;
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      background:#fff;
+    }
+
+    .signature-preview img{
+      max-width:100%;
+      max-height:120px;
+      display:block;
+    }
+
     .table-wrap{
       overflow:auto;
       border:1px solid var(--line);
@@ -567,7 +627,7 @@
     table{
       width:100%;
       border-collapse:collapse;
-      min-width:1700px;
+      min-width:1900px;
       background:#fff;
     }
 
@@ -720,7 +780,6 @@
     <header class="topbar">
       <div class="topbar-left">
         <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo DHL" class="logo-topbar">
-
         <div>
           <h1>Livro de Ocorrência - Passagem de Turno</h1>
           <p>Registro padronizado com visão gerencial e controle operacional</p>
@@ -909,6 +968,13 @@
               <div style="height:12px"></div>
 
               <div class="field">
+                <label>Efetivo</label>
+                <textarea name="efetivo" required></textarea>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="field">
                 <label>Descrição</label>
                 <textarea name="descricao" required></textarea>
               </div>
@@ -925,6 +991,25 @@
               <div class="field">
                 <label>Pendências</label>
                 <textarea name="pendencias"></textarea>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="field">
+                <label>Assinatura manual</label>
+
+                <div class="signature-wrapper">
+                  <canvas id="signature-pad" class="signature-pad"></canvas>
+                  <input type="hidden" name="assinatura" id="assinatura">
+
+                  <div class="signature-toolbar">
+                    <button type="button" class="btn btn-dark" onclick="limparAssinatura()">Limpar assinatura</button>
+                  </div>
+
+                  <div class="small">
+                    Assine no quadro acima usando o mouse ou o dedo na tela.
+                  </div>
+                </div>
               </div>
 
               <div class="actions">
@@ -974,11 +1059,29 @@
                 <div><strong>Resp. saída:</strong> {{ ultima_ocorrencia.responsavel_saida }}</div>
                 <div><strong>Resp. entrada:</strong> {{ ultima_ocorrencia.responsavel_entrada }}</div>
 
+                <div style="margin-top:10px;"><strong>Efetivo:</strong></div>
+                <div>{{ ultima_ocorrencia.efetivo or '-' }}</div>
+
                 <div style="margin-top:10px;"><strong>Descrição:</strong></div>
                 <div>{{ ultima_ocorrencia.descricao }}</div>
 
                 <div style="margin-top:10px;"><strong>Pendências:</strong></div>
                 <div>{{ ultima_ocorrencia.pendencias or '-' }}</div>
+
+                <div class="assinatura-box">
+                  <div><strong>Assinatura:</strong></div>
+
+                  {% if ultima_ocorrencia.assinatura %}
+                    <div class="signature-preview">
+                      <img src="{{ ultima_ocorrencia.assinatura }}" alt="Assinatura">
+                    </div>
+                  {% else %}
+                    <div>-</div>
+                  {% endif %}
+
+                  <div class="assinatura-line"></div>
+                  <div class="assinatura-label">Responsável pelo registro / passagem de turno</div>
+                </div>
               </div>
             {% else %}
               <div class="small">Nenhuma ocorrência cadastrada até o momento.</div>
@@ -1065,7 +1168,9 @@
                   <th>Status</th>
                   <th>Resp. saída</th>
                   <th>Resp. entrada</th>
+                  <th>Efetivo</th>
                   <th>Descrição</th>
+                  <th>Assinatura</th>
                   <th>Ações</th>
                 </tr>
               </thead>
@@ -1090,13 +1195,19 @@
                     </td>
                     <td>{{ r.responsavel_saida }}</td>
                     <td>{{ r.responsavel_entrada }}</td>
+                    <td>{{ r.efetivo or '-' }}</td>
                     <td>{{ r.descricao }}</td>
+                    <td>
+                      {% if r.assinatura %}
+                        <img src="{{ r.assinatura }}" alt="Assinatura" style="max-width:140px; max-height:50px; display:block;">
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
                     <td>
                       <div class="table-actions">
                         {% if r.status != 'FINALIZADO' %}
-                          <a href="{{ url_for('editar_ocorrencia', ocorrencia_id=r.id) }}"
-                             class="btn btn-dark"
-                             style="padding:8px 10px;">
+                          <a href="{{ url_for('editar_ocorrencia', ocorrencia_id=r.id) }}" class="btn btn-dark" style="padding:8px 10px;">
                             Editar
                           </a>
 
@@ -1104,21 +1215,21 @@
                                 action="{{ url_for('fechar_ocorrencia', ocorrencia_id=r.id) }}"
                                 class="inline-form"
                                 onsubmit="return confirm('Deseja finalizar esta ocorrência?');">
-                            <button type="submit"
-                                    class="btn btn-close"
-                                    style="padding:8px 10px;">
+                            <button type="submit" class="btn btn-close" style="padding:8px 10px;">
                               Finalizar
                             </button>
                           </form>
                         {% endif %}
 
+                        <a href="{{ url_for('export_ocorrencia_individual_pdf', ocorrencia_id=r.id) }}" class="btn btn-soft" style="padding:8px 10px;">
+                          PDF
+                        </a>
+
                         <form method="POST"
                               action="{{ url_for('excluir_ocorrencia', ocorrencia_id=r.id) }}"
                               class="inline-form"
                               onsubmit="return confirm('Deseja excluir esta ocorrência?');">
-                          <button type="submit"
-                                  class="btn btn-red"
-                                  style="padding:8px 10px;">
+                          <button type="submit" class="btn btn-red" style="padding:8px 10px;">
                             Excluir
                           </button>
                         </form>
@@ -1127,7 +1238,9 @@
                   </tr>
                 {% else %}
                   <tr>
-                    <td colspan="12">Nenhuma ocorrência registrada.</td>
+                    <td colspan="14" style="text-align:center; color:#6b7280; font-weight:700;">
+                      Nenhuma ocorrência encontrada.
+                    </td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -1139,6 +1252,99 @@
     </div>
   </main>
 </div>
+
+<script>
+  const canvas = document.getElementById("signature-pad");
+  const hiddenInput = document.getElementById("assinatura");
+
+  if (canvas && hiddenInput) {
+    const ctx = canvas.getContext("2d");
+    let desenhando = false;
+
+    function configurarContexto() {
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#111111";
+    }
+
+    function ajustarCanvas() {
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const rect = canvas.getBoundingClientRect();
+      const imagemAnterior = hiddenInput.value;
+
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(ratio, ratio);
+      configurarContexto();
+
+      if (imagemAnterior) {
+        const img = new Image();
+        img.onload = function() {
+          ctx.drawImage(img, 0, 0, rect.width, rect.height);
+        };
+        img.src = imagemAnterior;
+      }
+    }
+
+    function pegarPosicao(event) {
+      const rect = canvas.getBoundingClientRect();
+      const touch = event.touches ? event.touches[0] : null;
+      return {
+        x: touch ? touch.clientX - rect.left : event.clientX - rect.left,
+        y: touch ? touch.clientY - rect.top : event.clientY - rect.top
+      };
+    }
+
+    function iniciarDesenho(event) {
+      desenhando = true;
+      const pos = pegarPosicao(event);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      event.preventDefault();
+    }
+
+    function desenhar(event) {
+      if (!desenhando) return;
+      const pos = pegarPosicao(event);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      salvarAssinatura();
+      event.preventDefault();
+    }
+
+    function pararDesenho() {
+      if (!desenhando) return;
+      desenhando = false;
+      ctx.closePath();
+      salvarAssinatura();
+    }
+
+    function salvarAssinatura() {
+      hiddenInput.value = canvas.toDataURL("image/png");
+    }
+
+    window.limparAssinatura = function() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      configurarContexto();
+      hiddenInput.value = "";
+    };
+
+    ajustarCanvas();
+    window.addEventListener("resize", ajustarCanvas);
+
+    canvas.addEventListener("mousedown", iniciarDesenho);
+    canvas.addEventListener("mousemove", desenhar);
+    canvas.addEventListener("mouseup", pararDesenho);
+    canvas.addEventListener("mouseleave", pararDesenho);
+
+    canvas.addEventListener("touchstart", iniciarDesenho, { passive: false });
+    canvas.addEventListener("touchmove", desenhar, { passive: false });
+    canvas.addEventListener("touchend", pararDesenho);
+  }
+</script>
 
 </body>
 </html>
