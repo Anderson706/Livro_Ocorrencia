@@ -26,6 +26,27 @@ from reportlab.platypus import (
 )
 
 
+from io import BytesIO
+from datetime import datetime
+import os
+
+from flask import send_file
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+    Image,
+    KeepTogether
+)
+
+
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "dev-secret-change-me"
 
@@ -854,7 +875,7 @@ def export_ocorrencias_excel():
             r.descricao,
             r.acoes_tomadas or "",
             r.pendencias or "",
-            r.assinatura or "",
+            r.criado_por or "",
             r.status,
             r.criado_por or "",
             r.created_at.strftime("%d/%m/%Y %H:%M") if r.created_at else "",
@@ -884,28 +905,6 @@ def export_ocorrencias_excel():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-# =========================
-# EXPORTAÇÃO PDF INDIVIDUAL
-# =========================
-from io import BytesIO
-from datetime import datetime
-import os
-
-from flask import send_file
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-    Image,
-    KeepTogether
-)
 
 def assinatura_base64_para_image(assinatura_b64, largura_mm=60, altura_mm=22):
     if not assinatura_b64:
