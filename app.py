@@ -4,6 +4,7 @@ from io import BytesIO
 from html import escape
 from datetime import datetime, date
 from functools import wraps
+import webview
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -47,12 +48,19 @@ from reportlab.platypus import (
 )
 
 
-app = Flask(__name__)
+import sys
+import os
+
+if getattr(sys, 'frozen', False):
+    template_folder = os.path.join(sys._MEIPASS, 'templates')
+    static_folder = os.path.join(sys._MEIPASS, 'static')
+    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+else:
+    app = Flask(__name__)
+
 app.config["SECRET_KEY"] = "dev-secret-change-me"
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_PATH = os.path.join(BASE_DIR, "livro_ocorrencias.db")
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
+app.config["SQLALCHEMY_DATABASE_URI"] = "oracle+oracledb://SECPANEL:SEC003q2w3e4r2026@usqasap023-scan.phx-dc.dhl.com:1521/?service_name=SECPANEL"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -84,7 +92,7 @@ STATUS_VALIDOS = {"EM ABERTO", "EM ACOMPANHAMENTO", "FINALIZADO"}
 class User(db.Model):
     __tablename__ = "users"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, db.Sequence('user_id_seq'), primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
@@ -103,7 +111,7 @@ class User(db.Model):
 class OcorrenciaTurno(db.Model):
     __tablename__ = "ocorrencias_turno"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, db.Sequence('ocorrencia_id_seq'), primary_key=True)
     data_ocorrencia = db.Column(db.Date, nullable=False, default=date.today)
     data_hora_registro = db.Column(db.DateTime, nullable=False, default=datetime.now)
 
@@ -154,14 +162,18 @@ class OcorrenciaTurno(db.Model):
 
 def garantir_colunas_ocorrencias():
     with db.engine.connect() as conn:
-        result = conn.execute(db.text("PRAGMA table_info(ocorrencias_turno)"))
-        colunas = {row[1] for row in result.fetchall()}
+        # Consulta compatível com Oracle para verificar as colunas existentes
+        result = conn.execute(db.text("SELECT COLUMN_NAME FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'OCORRENCIAS_TURNO'"))
+        # O Oracle costuma retornar os nomes em maiúsculo
+        colunas = {row[0].upper() for row in result.fetchall()}
 
-        if "efetivo" not in colunas:
-            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD COLUMN efetivo TEXT"))
+        if "EFETIVO" not in colunas:
+            # Em Oracle, SQLAlchemy Text() vira CLOB
+            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD efetivo CLOB"))
 
-        if "assinatura" not in colunas:
-            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD COLUMN assinatura TEXT"))
+        if "ASSINATURA" not in colunas:
+            # Em Oracle, usamos VARCHAR2
+            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD assinatura VARCHAR2(120)"))
 
         conn.commit()
 
@@ -1849,6 +1861,7 @@ def criar_banco():
 
 if __name__ == "__main__":
     with app.app_context():
+        # db.drop_all()
         db.create_all()
 
         admin = User.query.filter_by(email="admin@dhl.com").first()
@@ -1863,5 +1876,12 @@ if __name__ == "__main__":
             admin.set_password("123456")
             db.session.add(admin)
             db.session.commit()
+    
+        janela = webview.create_window(
+                'Livro de Ocorrências - DHL', 
+                app, 
+                width=1280, 
+                height=800
+            )
 
-    app.run(debug=True)
+    webview.start()
