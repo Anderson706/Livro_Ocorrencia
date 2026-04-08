@@ -1339,6 +1339,9 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
 # =========================
 
 
+# =========================
+# EXPORTAÇÃO PDF GERAL
+# =========================
 @app.route("/export-ocorrencias-pdf")
 @login_required
 def export_ocorrencias_pdf():
@@ -1349,17 +1352,14 @@ def export_ocorrencias_pdf():
     doc = SimpleDocTemplate(
         output,
         pagesize=landscape(A4),
-        leftMargin=10 * mm,
-        rightMargin=10 * mm,
+        leftMargin=8 * mm,
+        rightMargin=8 * mm,
         topMargin=18 * mm,
         bottomMargin=14 * mm
     )
 
     styles = getSampleStyleSheet()
 
-    # =========================
-    # ESTILOS
-    # =========================
     title_style = ParagraphStyle(
         "DHLTitle",
         parent=styles["Heading1"],
@@ -1402,21 +1402,12 @@ def export_ocorrencias_pdf():
         alignment=TA_LEFT,
     )
 
-    small_style = ParagraphStyle(
-        "Small",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=8,
-        leading=10,
-        textColor=colors.HexColor("#4B5563"),
-    )
-
     cell_style = ParagraphStyle(
         "CellStyle",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=7.6,
-        leading=9,
+        fontSize=7.2,
+        leading=8.5,
         textColor=colors.HexColor("#1F2937"),
     )
 
@@ -1446,9 +1437,6 @@ def export_ocorrencias_pdf():
         alignment=TA_CENTER,
     )
 
-    # =========================
-    # HELPERS
-    # =========================
     def valor_seguro(v):
         return pdf_safe(str(v)) if v not in (None, "", "None") else "-"
 
@@ -1468,11 +1456,7 @@ def export_ocorrencias_pdf():
             fg = "#374151"
 
         return Paragraph(
-            f"""<para align="center">
-                <font color="{fg}">
-                    <b>{valor_seguro(prioridade)}</b>
-                </font>
-            </para>""",
+            f"""<para align="center"><font color="{fg}"><b>{valor_seguro(prioridade)}</b></font></para>""",
             ParagraphStyle(
                 "badge_prio",
                 parent=cell_style,
@@ -1484,10 +1468,10 @@ def export_ocorrencias_pdf():
 
     def status_badge(status):
         s = (status or "").strip().lower()
-        if s in ["concluída", "concluida", "fechada", "finalizada"]:
+        if s in ["finalizado", "concluída", "concluida", "fechada", "finalizada"]:
             bg = "#E8F7EE"
             fg = "#146C43"
-        elif s in ["em andamento", "pendente", "aberta"]:
+        elif s in ["em acompanhamento", "em andamento", "pendente", "aberta", "em aberto"]:
             bg = "#FFF4DB"
             fg = "#9A6700"
         elif s in ["crítica", "critica", "atrasada"]:
@@ -1498,11 +1482,7 @@ def export_ocorrencias_pdf():
             fg = "#344054"
 
         return Paragraph(
-            f"""<para align="center">
-                <font color="{fg}">
-                    <b>{valor_seguro(status)}</b>
-                </font>
-            </para>""",
+            f"""<para align="center"><font color="{fg}"><b>{valor_seguro(status)}</b></font></para>""",
             ParagraphStyle(
                 "badge_status",
                 parent=cell_style,
@@ -1515,20 +1495,32 @@ def export_ocorrencias_pdf():
     def p(txt, style=cell_style):
         return Paragraph(valor_seguro(txt), style)
 
+    def tem_sim_nao(valor):
+        return "SIM" if valor else "NÃO"
+
+    def total_imagens(r):
+        total = 0
+        if r.imagem_1:
+            total += 1
+        if r.imagem_2:
+            total += 1
+        if r.imagem_3:
+            total += 1
+        if r.imagem_4:
+            total += 1
+        return total
+
     def draw_header_footer(canvas, doc):
         canvas.saveState()
 
         page_width, page_height = landscape(A4)
 
-        # Barra superior vermelha
         canvas.setFillColor(colors.HexColor("#D40511"))
         canvas.rect(0, page_height - 12 * mm, page_width, 12 * mm, fill=1, stroke=0)
 
-        # Faixa fina amarela abaixo
         canvas.setFillColor(colors.HexColor("#FFCC00"))
         canvas.rect(0, page_height - 14 * mm, page_width, 2 * mm, fill=1, stroke=0)
 
-        # Cabeçalho
         canvas.setFillColor(colors.white)
         canvas.setFont("Helvetica-Bold", 11)
         canvas.drawString(12 * mm, page_height - 8.2 * mm, "DHL SECURITY")
@@ -1540,7 +1532,6 @@ def export_ocorrencias_pdf():
             f"Relatório gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
         )
 
-        # Rodapé
         canvas.setStrokeColor(colors.HexColor("#D1D5DB"))
         canvas.setLineWidth(0.4)
         canvas.line(10 * mm, 10 * mm, page_width - 10 * mm, 10 * mm)
@@ -1552,9 +1543,6 @@ def export_ocorrencias_pdf():
 
         canvas.restoreState()
 
-    # =========================
-    # CONTEÚDO
-    # =========================
     elementos = []
 
     elementos.append(Paragraph("LIVRO DE OCORRÊNCIAS DE PASSAGEM DE TURNO", title_style))
@@ -1564,7 +1552,6 @@ def export_ocorrencias_pdf():
     ))
     elementos.append(Spacer(1, 4))
 
-    # Bloco de filtros
     filtros_data = [
         ["Data inicial", valor_seguro(filtros.get("data_inicial"))],
         ["Data final", valor_seguro(filtros.get("data_final"))],
@@ -1592,7 +1579,6 @@ def export_ocorrencias_pdf():
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
 
-    # KPI
     total_ocorrencias = len(rows)
 
     kpi_table = Table([
@@ -1626,9 +1612,6 @@ def export_ocorrencias_pdf():
     elementos.append(KeepTogether(resumo_bloco))
     elementos.append(Spacer(1, 10))
 
-    # =========================
-    # TABELA PRINCIPAL
-    # =========================
     data = [[
         Paragraph("<b>ID</b>", cell_bold_style),
         Paragraph("<b>DATA / HORA</b>", cell_bold_style),
@@ -1636,10 +1619,13 @@ def export_ocorrencias_pdf():
         Paragraph("<b>TURNO</b>", cell_bold_style),
         Paragraph("<b>SETOR</b>", cell_bold_style),
         Paragraph("<b>TIPO</b>", cell_bold_style),
-        Paragraph("<b>PRIORIDADE</b>", cell_bold_style),
+        Paragraph("<b>PRIOR.</b>", cell_bold_style),
         Paragraph("<b>STATUS</b>", cell_bold_style),
         Paragraph("<b>RESP. SAÍDA</b>", cell_bold_style),
         Paragraph("<b>RESP. ENTRADA</b>", cell_bold_style),
+        Paragraph("<b>ASS. SAÍDA</b>", cell_bold_style),
+        Paragraph("<b>ASS. ENTRADA</b>", cell_bold_style),
+        Paragraph("<b>IMGS</b>", cell_bold_style),
     ]]
 
     for r in rows:
@@ -1654,27 +1640,32 @@ def export_ocorrencias_pdf():
             status_badge(r.status),
             p(r.responsavel_saida),
             p(r.responsavel_entrada),
+            p(tem_sim_nao(r.assinatura_saida)),
+            p(tem_sim_nao(r.assinatura_entrada)),
+            p(str(total_imagens(r))),
         ])
 
     tabela = Table(
         data,
         repeatRows=1,
         colWidths=[
-            12 * mm,   # ID
-            28 * mm,   # Data/Hora
-            23 * mm,   # Site
-            18 * mm,   # Turno
-            28 * mm,   # Setor
-            42 * mm,   # Tipo
-            26 * mm,   # Prioridade
-            30 * mm,   # Status
-            38 * mm,   # Resp Saída
-            38 * mm,   # Resp Entrada
+            10 * mm,
+            24 * mm,
+            18 * mm,
+            16 * mm,
+            24 * mm,
+            34 * mm,
+            20 * mm,
+            24 * mm,
+            30 * mm,
+            30 * mm,
+            18 * mm,
+            18 * mm,
+            12 * mm,
         ]
     )
 
     tabela.setStyle(TableStyle([
-        # Cabeçalho
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FFCC00")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
@@ -1682,35 +1673,31 @@ def export_ocorrencias_pdf():
         ("ALIGN", (0, 0), (-1, 0), "CENTER"),
         ("VALIGN", (0, 0), (-1, 0), "MIDDLE"),
 
-        # Corpo
         ("BACKGROUND", (0, 1), (-1, -1), colors.white),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FCFCFD")]),
         ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#111827")),
         ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 1), (-1, -1), 7.5),
+        ("FONTSIZE", (0, 1), (-1, -1), 7.2),
         ("VALIGN", (0, 1), (-1, -1), "MIDDLE"),
 
-        # Bordas
         ("LINEBELOW", (0, 0), (-1, 0), 0.9, colors.HexColor("#D1A800")),
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#DADDE1")),
         ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#C9CDD3")),
 
-        # Padding
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
 
-        # Alinhamentos específicos
-        ("ALIGN", (0, 1), (0, -1), "CENTER"),   # ID
-        ("ALIGN", (1, 1), (1, -1), "CENTER"),   # Data/Hora
-        ("ALIGN", (3, 1), (3, -1), "CENTER"),   # Turno
-        ("ALIGN", (6, 1), (7, -1), "CENTER"),   # Prioridade/Status
+        ("ALIGN", (0, 1), (0, -1), "CENTER"),
+        ("ALIGN", (1, 1), (1, -1), "CENTER"),
+        ("ALIGN", (3, 1), (3, -1), "CENTER"),
+        ("ALIGN", (6, 1), (7, -1), "CENTER"),
+        ("ALIGN", (10, 1), (12, -1), "CENTER"),
     ]))
 
     elementos.append(tabela)
 
-    # Construção do PDF
     doc.build(
         elementos,
         onFirstPage=draw_header_footer,
@@ -1730,9 +1717,13 @@ def export_ocorrencias_pdf():
 # =========================
 # SETUP
 # =========================
+# =========================
+# SETUP
+# =========================
 @app.route("/criar-banco")
 def criar_banco():
     db.create_all()
+    garantir_colunas_ocorrencias()
 
     admin = User.query.filter_by(email="admin@dhl.com").first()
     if not admin:
@@ -1753,6 +1744,7 @@ def criar_banco():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        garantir_colunas_ocorrencias()
 
         admin = User.query.filter_by(email="admin@dhl.com").first()
         if not admin:
