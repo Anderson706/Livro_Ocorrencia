@@ -6,8 +6,15 @@ from datetime import datetime, date
 from functools import wraps
 
 from flask import (
-    Flask, render_template, request, redirect, url_for,
-    flash, session, send_file, send_from_directory
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    session,
+    send_file,
+    send_from_directory,
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func, case
@@ -17,52 +24,20 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
-
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    Image, SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-)
-from io import BytesIO
-from datetime import datetime
-
-from flask import send_file
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-    KeepTogether
-)
-
-from io import BytesIO
-from datetime import datetime
-import os
-
-from flask import send_file
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
     Image,
-    KeepTogether
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer,
+    KeepTogether,
 )
-
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "dev-secret-change-me"
@@ -79,7 +54,6 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
 db = SQLAlchemy(app)
-
 
 # =========================
 # CONSTANTES / PADRÕES
@@ -99,11 +73,6 @@ TIPOS_VALIDOS = {
 }
 PRIORIDADES_VALIDAS = {"BAIXA", "MEDIA", "MÉDIA", "ALTA", "CRITICA", "CRÍTICA"}
 STATUS_VALIDOS = {"EM ABERTO", "EM ACOMPANHAMENTO", "FINALIZADO"}
-
-
-
-
-
 
 
 # =========================
@@ -168,7 +137,9 @@ class OcorrenciaTurno(db.Model):
         return {
             "id": self.id,
             "data_ocorrencia": self.data_ocorrencia.strftime("%d/%m/%Y") if self.data_ocorrencia else "",
-            "data_hora_registro": self.data_hora_registro.strftime("%d/%m/%Y %H:%M") if self.data_hora_registro else "",
+            "data_hora_registro": self.data_hora_registro.strftime("%d/%m/%Y %H:%M")
+            if self.data_hora_registro
+            else "",
             "site": self.site,
             "turno": self.turno,
             "setor": self.setor,
@@ -227,20 +198,6 @@ def garantir_colunas_ocorrencias():
         conn.commit()
 
 
-
-def garantir_colunas_ocorrencias():
-    with db.engine.connect() as conn:
-        result = conn.execute(db.text("PRAGMA table_info(ocorrencias_turno)"))
-        colunas = {row[1] for row in result.fetchall()}
-
-        if "efetivo" not in colunas:
-            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD COLUMN efetivo TEXT"))
-
-        if "assinatura" not in colunas:
-            conn.execute(db.text("ALTER TABLE ocorrencias_turno ADD COLUMN assinatura VARCHAR(120)"))
-
-        conn.commit()
-
 # =========================
 # DECORATORS
 # =========================
@@ -251,6 +208,7 @@ def login_required(funcao):
             flash("Faça login para acessar o sistema.", "warning")
             return redirect(url_for("login"))
         return funcao(*args, **kwargs)
+
     return wrapper
 
 
@@ -264,13 +222,13 @@ def admin_required(funcao):
             flash("Apenas administradores podem acessar esta funcionalidade.", "danger")
             return redirect(url_for("index"))
         return funcao(*args, **kwargs)
+
     return wrapper
 
 
 # =========================
 # HELPERS
 # =========================
-
 def allowed_image_file(filename: str) -> bool:
     if not filename or "." not in filename:
         return False
@@ -291,7 +249,6 @@ def salvar_imagem_upload(file_storage, prefixo="img"):
     caminho = os.path.join(app.config["UPLOAD_FOLDER"], nome_final)
     file_storage.save(caminho)
     return nome_final
-
 
 
 def normalizar_texto(valor: str) -> str:
@@ -382,7 +339,7 @@ def get_filtros_ocorrencias():
 
     query = query.order_by(
         OcorrenciaTurno.data_hora_registro.desc(),
-        OcorrenciaTurno.id.desc()
+        OcorrenciaTurno.id.desc(),
     )
 
     filtros = {
@@ -441,7 +398,7 @@ def ordenar_turnos_query():
         (OcorrenciaTurno.turno == "TURNO B", 2),
         (OcorrenciaTurno.turno == "TURNO C", 3),
         (OcorrenciaTurno.turno == "ADM", 4),
-        else_=99
+        else_=99,
     )
 
 
@@ -451,8 +408,39 @@ def ordenar_prioridade_query():
         (OcorrenciaTurno.prioridade == "ALTA", 2),
         (OcorrenciaTurno.prioridade == "MEDIA", 3),
         (OcorrenciaTurno.prioridade == "BAIXA", 4),
-        else_=99
+        else_=99,
     )
+
+
+def assinatura_base64_para_image(assinatura_b64, largura_mm=60, altura_mm=22):
+    if not assinatura_b64:
+        return None
+
+    try:
+        if "," in assinatura_b64:
+            _, encoded = assinatura_b64.split(",", 1)
+        else:
+            encoded = assinatura_b64
+
+        image_bytes = base64.b64decode(encoded)
+        buffer = BytesIO(image_bytes)
+        return Image(buffer, width=largura_mm * mm, height=altura_mm * mm)
+    except Exception:
+        return None
+
+
+def fit_image(path, max_width, max_height):
+    try:
+        img = Image(path)
+        iw, ih = img.imageWidth, img.imageHeight
+        if not iw or not ih:
+            return None
+        proporcao = min(max_width / float(iw), max_height / float(ih))
+        img.drawWidth = iw * proporcao
+        img.drawHeight = ih * proporcao
+        return img
+    except Exception:
+        return None
 
 
 # =========================
@@ -480,7 +468,7 @@ def login():
 
     return render_template(
         "login.html",
-        permitir_admin_publico=pode_criar_admin_publicamente()
+        permitir_admin_publico=pode_criar_admin_publicamente(),
     )
 
 
@@ -527,7 +515,7 @@ def criar_usuario():
             email=email,
             role=role_solicitado,
             site=site,
-            is_active=True
+            is_active=True,
         )
         novo.set_password(senha)
 
@@ -544,7 +532,7 @@ def criar_usuario():
     return render_template(
         "criar_usuario.html",
         permitir_admin_publico=admin_publico_liberado,
-        usuario_logado_admin=usuario_logado_admin
+        usuario_logado_admin=usuario_logado_admin,
     )
 
 
@@ -681,8 +669,9 @@ def index():
         ocorrencias=ocorrencias,
         filtros=filtros,
         hoje=date.today().strftime("%Y-%m-%d"),
-        proximo_id_previsto=proximo_id_previsto
+        proximo_id_previsto=proximo_id_previsto,
     )
+
 
 @app.route("/uploads/<path:filename>")
 @login_required
@@ -714,11 +703,22 @@ def salvar_ocorrencia_turno():
         pendencias = (request.form.get("pendencias") or "").strip()
         status = normalizar_texto(request.form.get("status"))
 
-        if not all([
-            data_ocorrencia, data_hora_registro, site, turno, setor,
-            tipo_ocorrencia, prioridade, responsavel_saida,
-            responsavel_entrada, descricao, efetivo, status
-        ]):
+        if not all(
+            [
+                data_ocorrencia,
+                data_hora_registro,
+                site,
+                turno,
+                setor,
+                tipo_ocorrencia,
+                prioridade,
+                responsavel_saida,
+                responsavel_entrada,
+                descricao,
+                efetivo,
+                status,
+            ]
+        ):
             flash("Preencha todos os campos obrigatórios.", "danger")
             return redirect(url_for("index"))
 
@@ -764,7 +764,7 @@ def salvar_ocorrencia_turno():
             acoes_tomadas=acoes_tomadas or None,
             pendencias=pendencias or None,
             status=status,
-            criado_por=session.get("username", "Usuário")
+            criado_por=session.get("username", "Usuário"),
         )
 
         db.session.add(nova)
@@ -777,6 +777,7 @@ def salvar_ocorrencia_turno():
 
     return redirect(url_for("index"))
 
+
 @app.route("/ocorrencias/<int:ocorrencia_id>/editar", methods=["GET", "POST"])
 @login_required
 def editar_ocorrencia(ocorrencia_id):
@@ -785,7 +786,9 @@ def editar_ocorrencia(ocorrencia_id):
     if request.method == "POST":
         try:
             ocorrencia.data_ocorrencia = parse_date_or_none(request.form.get("data_ocorrencia"))
-            ocorrencia.data_hora_registro = parse_datetime_local(request.form.get("data_hora_registro"))
+            ocorrencia.data_hora_registro = parse_datetime_local(
+                request.form.get("data_hora_registro")
+            )
 
             ocorrencia.site = normalizar_texto(request.form.get("site"))
             ocorrencia.turno = normalizar_texto(request.form.get("turno"))
@@ -793,7 +796,9 @@ def editar_ocorrencia(ocorrencia_id):
             ocorrencia.tipo_ocorrencia = normalizar_tipo(request.form.get("tipo_ocorrencia"))
             ocorrencia.prioridade = normalizar_prioridade(request.form.get("prioridade"))
             ocorrencia.responsavel_saida = (request.form.get("responsavel_saida") or "").strip()
-            ocorrencia.responsavel_entrada = (request.form.get("responsavel_entrada") or "").strip()
+            ocorrencia.responsavel_entrada = (
+                request.form.get("responsavel_entrada") or ""
+            ).strip()
             ocorrencia.descricao = (request.form.get("descricao") or "").strip()
             ocorrencia.efetivo = (request.form.get("efetivo") or "").strip()
 
@@ -825,13 +830,22 @@ def editar_ocorrencia(ocorrencia_id):
             ocorrencia.status = normalizar_texto(request.form.get("status"))
             ocorrencia.updated_at = datetime.now()
 
-            if not all([
-                ocorrencia.data_ocorrencia, ocorrencia.data_hora_registro, ocorrencia.site,
-                ocorrencia.turno, ocorrencia.setor, ocorrencia.tipo_ocorrencia,
-                ocorrencia.prioridade, ocorrencia.responsavel_saida,
-                ocorrencia.responsavel_entrada, ocorrencia.descricao,
-                ocorrencia.efetivo, ocorrencia.status
-            ]):
+            if not all(
+                [
+                    ocorrencia.data_ocorrencia,
+                    ocorrencia.data_hora_registro,
+                    ocorrencia.site,
+                    ocorrencia.turno,
+                    ocorrencia.setor,
+                    ocorrencia.tipo_ocorrencia,
+                    ocorrencia.prioridade,
+                    ocorrencia.responsavel_saida,
+                    ocorrencia.responsavel_entrada,
+                    ocorrencia.descricao,
+                    ocorrencia.efetivo,
+                    ocorrencia.status,
+                ]
+            ):
                 flash("Preencha todos os campos obrigatórios.", "danger")
                 return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
 
@@ -864,8 +878,9 @@ def editar_ocorrencia(ocorrencia_id):
         "ocorrencia_form.html",
         ocorrencia=ocorrencia,
         data_ocorrencia_value=format_date_input(ocorrencia.data_ocorrencia),
-        data_hora_value=format_datetime_local_input(ocorrencia.data_hora_registro)
+        data_hora_value=format_datetime_local_input(ocorrencia.data_hora_registro),
     )
+
 
 @app.route("/ocorrencias/<int:ocorrencia_id>/fechar", methods=["POST"])
 @login_required
@@ -903,19 +918,26 @@ def excluir_ocorrencia(ocorrencia_id):
 # =========================
 @app.route("/dashboard-ocorrencias")
 @login_required
-
 def dashboard_ocorrencias():
-
     total = db.session.query(func.count(OcorrenciaTurno.id)).scalar() or 0
-    em_aberto = db.session.query(func.count(OcorrenciaTurno.id)).filter(
-        OcorrenciaTurno.status == "EM ABERTO"
-    ).scalar() or 0
-    acompanhamento = db.session.query(func.count(OcorrenciaTurno.id)).filter(
-        OcorrenciaTurno.status == "EM ACOMPANHAMENTO"
-    ).scalar() or 0
-    finalizado = db.session.query(func.count(OcorrenciaTurno.id)).filter(
-        OcorrenciaTurno.status == "FINALIZADO"
-    ).scalar() or 0
+    em_aberto = (
+        db.session.query(func.count(OcorrenciaTurno.id))
+        .filter(OcorrenciaTurno.status == "EM ABERTO")
+        .scalar()
+        or 0
+    )
+    acompanhamento = (
+        db.session.query(func.count(OcorrenciaTurno.id))
+        .filter(OcorrenciaTurno.status == "EM ACOMPANHAMENTO")
+        .scalar()
+        or 0
+    )
+    finalizado = (
+        db.session.query(func.count(OcorrenciaTurno.id))
+        .filter(OcorrenciaTurno.status == "FINALIZADO")
+        .scalar()
+        or 0
+    )
 
     por_turno = (
         db.session.query(OcorrenciaTurno.turno, func.count(OcorrenciaTurno.id))
@@ -964,12 +986,30 @@ def export_ocorrencias_excel():
     ws.title = "Livro de Ocorrências"
 
     headers = [
-        "ID", "Data da Ocorrência", "Data/Hora Registro", "Site", "Turno", "Setor",
-        "Tipo de Ocorrência", "Prioridade", "Responsável Saída", "Responsável Entrada",
-        "Efetivo", "Descrição", "Ações Tomadas", "Pendências",
-        "Assinatura Saída", "Assinatura Entrada",
-        "Imagem 1", "Imagem 2", "Imagem 3", "Imagem 4",
-        "Status", "Criado por", "Criado em", "Atualizado em"
+        "ID",
+        "Data da Ocorrência",
+        "Data/Hora Registro",
+        "Site",
+        "Turno",
+        "Setor",
+        "Tipo de Ocorrência",
+        "Prioridade",
+        "Responsável Saída",
+        "Responsável Entrada",
+        "Efetivo",
+        "Descrição",
+        "Ações Tomadas",
+        "Pendências",
+        "Assinatura Saída",
+        "Assinatura Entrada",
+        "Imagem 1",
+        "Imagem 2",
+        "Imagem 3",
+        "Imagem 4",
+        "Status",
+        "Criado por",
+        "Criado em",
+        "Atualizado em",
     ]
     ws.append(headers)
 
@@ -983,32 +1023,34 @@ def export_ocorrencias_excel():
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
     for r in rows:
-        ws.append([
-            r.id,
-            r.data_ocorrencia.strftime("%d/%m/%Y") if r.data_ocorrencia else "",
-            r.data_hora_registro.strftime("%d/%m/%Y %H:%M") if r.data_hora_registro else "",
-            r.site,
-            r.turno,
-            r.setor,
-            r.tipo_ocorrencia,
-            r.prioridade,
-            r.responsavel_saida,
-            r.responsavel_entrada,
-            r.efetivo or "",
-            r.descricao,
-            r.acoes_tomadas or "",
-            r.pendencias or "",
-            "SIM" if r.assinatura_saida else "NÃO",
-            "SIM" if r.assinatura_entrada else "NÃO",
-            r.imagem_1 or "",
-            r.imagem_2 or "",
-            r.imagem_3 or "",
-            r.imagem_4 or "",
-            r.status,
-            r.criado_por or "",
-            r.created_at.strftime("%d/%m/%Y %H:%M") if r.created_at else "",
-            r.updated_at.strftime("%d/%m/%Y %H:%M") if r.updated_at else "",
-        ])
+        ws.append(
+            [
+                r.id,
+                r.data_ocorrencia.strftime("%d/%m/%Y") if r.data_ocorrencia else "",
+                r.data_hora_registro.strftime("%d/%m/%Y %H:%M") if r.data_hora_registro else "",
+                r.site,
+                r.turno,
+                r.setor,
+                r.tipo_ocorrencia,
+                r.prioridade,
+                r.responsavel_saida,
+                r.responsavel_entrada,
+                r.efetivo or "",
+                r.descricao,
+                r.acoes_tomadas or "",
+                r.pendencias or "",
+                "SIM" if r.assinatura_saida else "NÃO",
+                "SIM" if r.assinatura_entrada else "NÃO",
+                r.imagem_1 or "",
+                r.imagem_2 or "",
+                r.imagem_3 or "",
+                r.imagem_4 or "",
+                r.status,
+                r.criado_por or "",
+                r.created_at.strftime("%d/%m/%Y %H:%M") if r.created_at else "",
+                r.updated_at.strftime("%d/%m/%Y %H:%M") if r.updated_at else "",
+            ]
+        )
 
     for col in ws.columns:
         max_length = 0
@@ -1030,27 +1072,13 @@ def export_ocorrencias_excel():
         output,
         as_attachment=True,
         download_name=nome_arquivo,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-def assinatura_base64_para_image(assinatura_b64, largura_mm=60, altura_mm=22):
-    if not assinatura_b64:
-        return None
 
-    try:
-        if "," in assinatura_b64:
-            _, encoded = assinatura_b64.split(",", 1)
-        else:
-            encoded = assinatura_b64
-
-        image_bytes = base64.b64decode(encoded)
-        buffer = BytesIO(image_bytes)
-        return Image(buffer, width=largura_mm * mm, height=altura_mm * mm)
-    except Exception:
-        return None
-
-
-
+# =========================
+# EXPORTAÇÃO PDF INDIVIDUAL
+# =========================
 @app.route("/ocorrencias/<int:ocorrencia_id>/pdf")
 @login_required
 def export_ocorrencia_individual_pdf(ocorrencia_id):
@@ -1063,7 +1091,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         leftMargin=12 * mm,
         rightMargin=12 * mm,
         topMargin=12 * mm,
-        bottomMargin=12 * mm
+        bottomMargin=12 * mm,
     )
 
     styles = getSampleStyleSheet()
@@ -1071,7 +1099,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
     titulo_style = ParagraphStyle(
         name="TituloOcorrencia",
         parent=styles["Title"],
-        alignment=1,
+        alignment=TA_CENTER,
         textColor=colors.HexColor("#d40511"),
         fontSize=16,
         leading=18,
@@ -1081,7 +1109,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
     sub_style = ParagraphStyle(
         name="SubOcorrencia",
         parent=styles["Normal"],
-        alignment=1,
+        alignment=TA_CENTER,
         textColor=colors.HexColor("#555555"),
         fontSize=8,
         leading=10,
@@ -1111,19 +1139,6 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
             return default
         valor = str(valor).strip()
         return pdf_safe(valor) if valor else default
-
-    def fit_image(path, max_width, max_height):
-        try:
-            img = Image(path)
-            iw, ih = img.imageWidth, img.imageHeight
-            if not iw or not ih:
-                return None
-            proporcao = min(max_width / float(iw), max_height / float(ih))
-            img.drawWidth = iw * proporcao
-            img.drawHeight = ih * proporcao
-            return img
-        except Exception:
-            return None
 
     elements = []
     elements.append(Paragraph("RELATÓRIO INDIVIDUAL DE OCORRÊNCIA", titulo_style))
@@ -1198,47 +1213,25 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
     elements.append(bloco_dados)
     elements.append(Spacer(1, 6))
 
-    elements.append(Paragraph("Efetivo", secao_style))
-    box_efetivo = Table([[Paragraph(v(ocorrencia.efetivo), small_style)]], colWidths=[540])
-    box_efetivo.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#d9d9d9")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fbfbfb")),
-    ]))
-    elements.append(box_efetivo)
-    elements.append(Spacer(1, 5))
-
-    elements.append(Paragraph("Descrição", secao_style))
-    box_desc = Table([[Paragraph(v(ocorrencia.descricao), small_style)]], colWidths=[540])
-    box_desc.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#d9d9d9")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fbfbfb")),
-    ]))
-    elements.append(box_desc)
-    elements.append(Spacer(1, 5))
-
-    elements.append(Paragraph("Ações tomadas", secao_style))
-    box_acoes = Table([[Paragraph(v(ocorrencia.acoes_tomadas), small_style)]], colWidths=[540])
-    box_acoes.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#d9d9d9")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fbfbfb")),
-    ]))
-    elements.append(box_acoes)
-    elements.append(Spacer(1, 5))
-
-    elements.append(Paragraph("Pendências", secao_style))
-    box_pend = Table([[Paragraph(v(ocorrencia.pendencias), small_style)]], colWidths=[540])
-    box_pend.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#d9d9d9")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fbfbfb")),
-    ]))
-    elements.append(box_pend)
-    elements.append(Spacer(1, 6))
+    for titulo, valor in [
+        ("Efetivo", ocorrencia.efetivo),
+        ("Descrição", ocorrencia.descricao),
+        ("Ações tomadas", ocorrencia.acoes_tomadas),
+        ("Pendências", ocorrencia.pendencias),
+    ]:
+        elements.append(Paragraph(titulo, secao_style))
+        box = Table([[Paragraph(v(valor), small_style)]], colWidths=[540])
+        box.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#d9d9d9")),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fbfbfb")),
+        ]))
+        elements.append(box)
+        elements.append(Spacer(1, 5))
 
     assinatura_saida_img = assinatura_base64_para_image(ocorrencia.assinatura_saida, largura_mm=55, altura_mm=20)
     assinatura_entrada_img = assinatura_base64_para_image(ocorrencia.assinatura_entrada, largura_mm=55, altura_mm=20)
 
     elements.append(Paragraph("Assinaturas", secao_style))
-
     assinatura_tabela = Table(
         [[
             assinatura_saida_img if assinatura_saida_img else Paragraph("-", small_style),
@@ -1248,7 +1241,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
             Paragraph(f"<b>Responsável saída:</b> {v(ocorrencia.responsavel_saida)}", small_style),
             Paragraph(f"<b>Responsável entrada:</b> {v(ocorrencia.responsavel_entrada)}", small_style),
         ]],
-        colWidths=[270, 270]
+        colWidths=[270, 270],
     )
     assinatura_tabela.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.35, colors.HexColor("#d9d9d9")),
@@ -1332,11 +1325,8 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         output,
         as_attachment=True,
         download_name=nome_arquivo,
-        mimetype="application/pdf"
+        mimetype="application/pdf",
     )
-# =========================
-# EXPORTAÇÃO PDF GERAL
-# =========================
 
 
 # =========================
@@ -1355,7 +1345,7 @@ def export_ocorrencias_pdf():
         leftMargin=8 * mm,
         rightMargin=8 * mm,
         topMargin=18 * mm,
-        bottomMargin=14 * mm
+        bottomMargin=14 * mm,
     )
 
     styles = getSampleStyleSheet()
@@ -1462,8 +1452,8 @@ def export_ocorrencias_pdf():
                 parent=cell_style,
                 backColor=colors.HexColor(bg),
                 borderPadding=(3, 5, 3),
-                alignment=TA_CENTER
-            )
+                alignment=TA_CENTER,
+            ),
         )
 
     def status_badge(status):
@@ -1488,8 +1478,8 @@ def export_ocorrencias_pdf():
                 parent=cell_style,
                 backColor=colors.HexColor(bg),
                 borderPadding=(3, 5, 3),
-                alignment=TA_CENTER
-            )
+                alignment=TA_CENTER,
+            ),
         )
 
     def p(txt, style=cell_style):
@@ -1510,7 +1500,7 @@ def export_ocorrencias_pdf():
             total += 1
         return total
 
-    def draw_header_footer(canvas, doc):
+    def draw_header_footer(canvas, _doc):
         canvas.saveState()
 
         page_width, page_height = landscape(A4)
@@ -1529,7 +1519,7 @@ def export_ocorrencias_pdf():
         canvas.drawRightString(
             page_width - 12 * mm,
             page_height - 8.2 * mm,
-            f"Relatório gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            f"Relatório gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}",
         )
 
         canvas.setStrokeColor(colors.HexColor("#D1D5DB"))
@@ -1546,10 +1536,12 @@ def export_ocorrencias_pdf():
     elementos = []
 
     elementos.append(Paragraph("LIVRO DE OCORRÊNCIAS DE PASSAGEM DE TURNO", title_style))
-    elementos.append(Paragraph(
-        "Relatório corporativo consolidado das ocorrências registradas no sistema.",
-        subtitle_style
-    ))
+    elementos.append(
+        Paragraph(
+            "Relatório corporativo consolidado das ocorrências registradas no sistema.",
+            subtitle_style,
+        )
+    )
     elementos.append(Spacer(1, 4))
 
     filtros_data = [
@@ -1561,53 +1553,65 @@ def export_ocorrencias_pdf():
     ]
 
     filtro_table = Table(
-        [[Paragraph("<b>FILTROS APLICADOS</b>", section_label_style), ""]] +
-        [[Paragraph(f"<b>{k}</b>", info_style), Paragraph(v, info_style)] for k, v in filtros_data],
-        colWidths=[45 * mm, 95 * mm]
+        [[Paragraph("<b>FILTROS APLICADOS</b>", section_label_style), ""]]
+        + [[Paragraph(f"<b>{k}</b>", info_style), Paragraph(v, info_style)] for k, v in filtros_data],
+        colWidths=[45 * mm, 95 * mm],
     )
-    filtro_table.setStyle(TableStyle([
-        ("SPAN", (0, 0), (1, 0)),
-        ("BACKGROUND", (0, 0), (1, 0), colors.HexColor("#D40511")),
-        ("TEXTCOLOR", (0, 0), (1, 0), colors.white),
-        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#FAFAFA")),
-        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#D1D5DB")),
-        ("INNERGRID", (0, 1), (-1, -1), 0.35, colors.HexColor("#E5E7EB")),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
+    filtro_table.setStyle(
+        TableStyle(
+            [
+                ("SPAN", (0, 0), (1, 0)),
+                ("BACKGROUND", (0, 0), (1, 0), colors.HexColor("#D40511")),
+                ("TEXTCOLOR", (0, 0), (1, 0), colors.white),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#FAFAFA")),
+                ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#D1D5DB")),
+                ("INNERGRID", (0, 1), (-1, -1), 0.35, colors.HexColor("#E5E7EB")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+        )
+    )
 
     total_ocorrencias = len(rows)
 
-    kpi_table = Table([
-        [Paragraph(str(total_ocorrencias), kpi_value_style)],
-        [Paragraph("TOTAL DE OCORRÊNCIAS", kpi_label_style)]
-    ], colWidths=[42 * mm])
-
-    kpi_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF8DB")),
-        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#FFCC00")),
-        ("LEFTPADDING", (0, 0), (-1, -1), 10),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-
-    resumo_bloco = Table(
-        [[filtro_table, kpi_table]],
-        colWidths=[145 * mm, 50 * mm]
+    kpi_table = Table(
+        [
+            [Paragraph(str(total_ocorrencias), kpi_value_style)],
+            [Paragraph("TOTAL DE OCORRÊNCIAS", kpi_label_style)],
+        ],
+        colWidths=[42 * mm],
     )
-    resumo_bloco.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
+
+    kpi_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF8DB")),
+                ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#FFCC00")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+        )
+    )
+
+    resumo_bloco = Table([[filtro_table, kpi_table]], colWidths=[145 * mm, 50 * mm])
+    resumo_bloco.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
 
     elementos.append(KeepTogether(resumo_bloco))
     elementos.append(Spacer(1, 10))
@@ -1629,21 +1633,23 @@ def export_ocorrencias_pdf():
     ]]
 
     for r in rows:
-        data.append([
-            p(r.id),
-            p(r.data_hora_registro.strftime("%d/%m/%Y %H:%M") if r.data_hora_registro else "-"),
-            p(r.site),
-            p(r.turno),
-            p(r.setor),
-            p(r.tipo_ocorrencia),
-            prioridade_badge(r.prioridade),
-            status_badge(r.status),
-            p(r.responsavel_saida),
-            p(r.responsavel_entrada),
-            p(tem_sim_nao(r.assinatura_saida)),
-            p(tem_sim_nao(r.assinatura_entrada)),
-            p(str(total_imagens(r))),
-        ])
+        data.append(
+            [
+                p(r.id),
+                p(r.data_hora_registro.strftime("%d/%m/%Y %H:%M") if r.data_hora_registro else "-"),
+                p(r.site),
+                p(r.turno),
+                p(r.setor),
+                p(r.tipo_ocorrencia),
+                prioridade_badge(r.prioridade),
+                status_badge(r.status),
+                p(r.responsavel_saida),
+                p(r.responsavel_entrada),
+                p(tem_sim_nao(r.assinatura_saida)),
+                p(tem_sim_nao(r.assinatura_entrada)),
+                p(str(total_imagens(r))),
+            ]
+        )
 
     tabela = Table(
         data,
@@ -1662,47 +1668,43 @@ def export_ocorrencias_pdf():
             18 * mm,
             18 * mm,
             12 * mm,
-        ]
+        ],
     )
 
-    tabela.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FFCC00")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 8),
-        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-        ("VALIGN", (0, 0), (-1, 0), "MIDDLE"),
-
-        ("BACKGROUND", (0, 1), (-1, -1), colors.white),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FCFCFD")]),
-        ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#111827")),
-        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 1), (-1, -1), 7.2),
-        ("VALIGN", (0, 1), (-1, -1), "MIDDLE"),
-
-        ("LINEBELOW", (0, 0), (-1, 0), 0.9, colors.HexColor("#D1A800")),
-        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#DADDE1")),
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#C9CDD3")),
-
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-
-        ("ALIGN", (0, 1), (0, -1), "CENTER"),
-        ("ALIGN", (1, 1), (1, -1), "CENTER"),
-        ("ALIGN", (3, 1), (3, -1), "CENTER"),
-        ("ALIGN", (6, 1), (7, -1), "CENTER"),
-        ("ALIGN", (10, 1), (12, -1), "CENTER"),
-    ]))
+    tabela.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FFCC00")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 8),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                ("VALIGN", (0, 0), (-1, 0), "MIDDLE"),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FCFCFD")]),
+                ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#111827")),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 1), (-1, -1), 7.2),
+                ("VALIGN", (0, 1), (-1, -1), "MIDDLE"),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.9, colors.HexColor("#D1A800")),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#DADDE1")),
+                ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#C9CDD3")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("ALIGN", (0, 1), (0, -1), "CENTER"),
+                ("ALIGN", (1, 1), (1, -1), "CENTER"),
+                ("ALIGN", (3, 1), (3, -1), "CENTER"),
+                ("ALIGN", (6, 1), (7, -1), "CENTER"),
+                ("ALIGN", (10, 1), (12, -1), "CENTER"),
+            ]
+        )
+    )
 
     elementos.append(tabela)
 
-    doc.build(
-        elementos,
-        onFirstPage=draw_header_footer,
-        onLaterPages=draw_header_footer
-    )
+    doc.build(elementos, onFirstPage=draw_header_footer, onLaterPages=draw_header_footer)
 
     output.seek(0)
     nome_arquivo = f"livro_ocorrencias_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
@@ -1711,12 +1713,10 @@ def export_ocorrencias_pdf():
         output,
         as_attachment=True,
         download_name=nome_arquivo,
-        mimetype="application/pdf"
+        mimetype="application/pdf",
     )
 
-# =========================
-# SETUP
-# =========================
+
 # =========================
 # SETUP
 # =========================
@@ -1732,7 +1732,7 @@ def criar_banco():
             email="admin@dhl.com",
             role="ADMIN",
             site="PG",
-            is_active=True
+            is_active=True,
         )
         admin.set_password("123456")
         db.session.add(admin)
@@ -1753,7 +1753,7 @@ if __name__ == "__main__":
                 email="admin@dhl.com",
                 role="ADMIN",
                 site="PG",
-                is_active=True
+                is_active=True,
             )
             admin.set_password("123456")
             db.session.add(admin)
