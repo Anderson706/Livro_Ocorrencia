@@ -1,9 +1,14 @@
 import os
+import sys
 import base64
+import webview               # ADICIONADO: WebView
+from threading import Thread # ADICIONADO: Thread
 from io import BytesIO
 from html import escape
 from datetime import datetime, date
 from functools import wraps
+
+from dotenv import load_dotenv
 
 from flask import (
     Flask,
@@ -39,26 +44,55 @@ from reportlab.platypus import (
     KeepTogether,
 )
 
-app = Flask(__name__)
+from PIL import Image as PILImage # ADICIONADO: Compressor de Imagens
+
+# =========================
+# FUNÇÃO PARA O PYINSTALLER
+# =========================
+def resource_path(relative_path):
+    """ Retorna o caminho absoluto para o recurso, compatível com o PyInstaller """
+    try:
+        # O PyInstaller extrai os ficheiros para esta pasta temporária
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
+app = Flask(__name__, 
+            template_folder=resource_path('templates'),
+            static_folder=resource_path('static'))
 app.config["SECRET_KEY"] = "dev-secret-change-me"
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_PATH = os.path.join(BASE_DIR, "livro_ocorrencias.db")
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# =========================
+# CONFIGURAÇÃO ORACLE DB SEGURA (.ENV EMBUTIDO)
+# =========================
+dotenv_path = resource_path('.env')
+load_dotenv(dotenv_path)
 
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASS")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT", "1521")
+DB_SERVICE = os.getenv("DB_SERVICE")
+
+if not all([DB_USER, DB_PASS, DB_HOST, DB_SERVICE]):
+    raise ValueError("Variáveis de ambiente do banco de dados não encontradas. Verifique o arquivo .env!")
+
+app.config["SQLALCHEMY_DATABASE_URI"] = f"oracle+oracledb://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/?service_name={DB_SERVICE}"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
 db = SQLAlchemy(app)
 
+
 # =========================
-# CONSTANTES / PADRÕES
+# CONSTANTES / CONTROLE DE VERSÃO
 # =========================
-SITES_VALIDOS = {"PG", "SHEIN", "ADIDAS", "MELI", "SANGOBAN"}
+APP_NAME = "LIVRO_OCORRENCIAS"
+APP_VERSION = "1.0.1"  # <- Altere este número sempre que compilar um novo executável
+
 TURNOS_VALIDOS = {"TURNO A", "TURNO B", "TURNO C", "ADM"}
 TIPOS_VALIDOS = {
     "ROTINA",
@@ -78,10 +112,25 @@ STATUS_VALIDOS = {"EM ABERTO", "EM ACOMPANHAMENTO", "FINALIZADO"}
 # =========================
 # MODELOS
 # =========================
-class User(db.Model):
-    __tablename__ = "users"
+class SistemaConfig(db.Model):
+    __tablename__ = "SISTEMA_CONFIG"
+    
+    id = db.Column("ID", db.Integer, primary_key=True)
+    versao_exigida = db.Column("VERSAO_EXIGIDA", db.String(20), nullable=True) 
+    versao_livro = db.Column("VERSAO_LIVRO", db.String(20), nullable=True)     
 
-    id = db.Column(db.Integer, primary_key=True)
+
+class Site(db.Model):
+    __tablename__ = "SITES"
+    
+    id_site = db.Column("ID_SITE", db.Integer, primary_key=True)
+    nome_site = db.Column("NOME_SITE", db.String(100), nullable=False)
+
+
+class User(db.Model):
+    __tablename__ = "users_livro"
+
+    id = db.Column(db.Integer, db.Identity(start=1), primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
@@ -100,7 +149,7 @@ class User(db.Model):
 class OcorrenciaTurno(db.Model):
     __tablename__ = "ocorrencias_turno"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, db.Identity(start=1), primary_key=True)
     data_ocorrencia = db.Column(db.Date, nullable=False, default=date.today)
     data_hora_registro = db.Column(db.DateTime, nullable=False, default=datetime.now)
 
@@ -119,10 +168,11 @@ class OcorrenciaTurno(db.Model):
     assinatura_saida = db.Column(db.Text, nullable=True)
     assinatura_entrada = db.Column(db.Text, nullable=True)
 
-    imagem_1 = db.Column(db.String(255), nullable=True)
-    imagem_2 = db.Column(db.String(255), nullable=True)
-    imagem_3 = db.Column(db.String(255), nullable=True)
-    imagem_4 = db.Column(db.String(255), nullable=True)
+    # ALTERAÇÃO: O banco agora espera Text (CLOB no Oracle) para aguentar o Base64 Longo
+    imagem_1 = db.Column(db.Text, nullable=True)
+    imagem_2 = db.Column(db.Text, nullable=True)
+    imagem_3 = db.Column(db.Text, nullable=True)
+    imagem_4 = db.Column(db.Text, nullable=True)
 
     acoes_tomadas = db.Column(db.Text, nullable=True)
     pendencias = db.Column(db.Text, nullable=True)
@@ -165,42 +215,88 @@ class OcorrenciaTurno(db.Model):
 
 
 def garantir_colunas_ocorrencias():
-    with db.engine.connect() as conn:
-        result = conn.execute(db.text("PRAGMA table_info(ocorrencias_turno)"))
-        colunas = {row[1] for row in result.fetchall()}
+    try:
+        with db.engine.connect() as conn:
+            result = conn.execute(db.text("SELECT lower(column_name) FROM user_tab_columns WHERE table_name = 'OCORRENCIAS_TURNO'"))
+            colunas = {row[0] for row in result.fetchall()}
 
-        comandos = []
+            if not colunas:
+                return
 
-        if "efetivo" not in colunas:
-            comandos.append("ALTER TABLE ocorrencias_turno ADD COLUMN efetivo TEXT")
+            comandos = []
 
-        if "assinatura_saida" not in colunas:
-            comandos.append("ALTER TABLE ocorrencias_turno ADD COLUMN assinatura_saida TEXT")
+            if "efetivo" not in colunas:
+                comandos.append("ALTER TABLE ocorrencias_turno ADD efetivo CLOB")
 
-        if "assinatura_entrada" not in colunas:
-            comandos.append("ALTER TABLE ocorrencias_turno ADD COLUMN assinatura_entrada TEXT")
+            if "assinatura_saida" not in colunas:
+                comandos.append("ALTER TABLE ocorrencias_turno ADD assinatura_saida CLOB")
 
-        if "imagem_1" not in colunas:
-            comandos.append("ALTER TABLE ocorrencias_turno ADD COLUMN imagem_1 VARCHAR(255)")
+            if "assinatura_entrada" not in colunas:
+                comandos.append("ALTER TABLE ocorrencias_turno ADD assinatura_entrada CLOB")
 
-        if "imagem_2" not in colunas:
-            comandos.append("ALTER TABLE ocorrencias_turno ADD COLUMN imagem_2 VARCHAR(255)")
+            # ALTERAÇÃO: Força o CLOB se for criar a coluna do zero
+            if "imagem_1" not in colunas:
+                comandos.append("ALTER TABLE ocorrencias_turno ADD imagem_1 CLOB")
 
-        if "imagem_3" not in colunas:
-            comandos.append("ALTER TABLE ocorrencias_turno ADD COLUMN imagem_3 VARCHAR(255)")
+            if "imagem_2" not in colunas:
+                comandos.append("ALTER TABLE ocorrencias_turno ADD imagem_2 CLOB")
 
-        if "imagem_4" not in colunas:
-            comandos.append("ALTER TABLE ocorrencias_turno ADD COLUMN imagem_4 VARCHAR(255)")
+            if "imagem_3" not in colunas:
+                comandos.append("ALTER TABLE ocorrencias_turno ADD imagem_3 CLOB")
 
-        for sql in comandos:
-            conn.execute(db.text(sql))
+            if "imagem_4" not in colunas:
+                comandos.append("ALTER TABLE ocorrencias_turno ADD imagem_4 CLOB")
 
-        conn.commit()
+            for sql in comandos:
+                conn.execute(db.text(sql))
+
+            conn.commit()
+    except Exception as e:
+        print(f"Aviso ao verificar colunas no Oracle (garantir_colunas): {e}")
+
+
+def garantir_colunas_sistema_config():
+    try:
+        with db.engine.connect() as conn:
+            result = conn.execute(db.text("SELECT lower(column_name) FROM user_tab_columns WHERE table_name = 'SISTEMA_CONFIG'"))
+            colunas = {row[0] for row in result.fetchall()}
+            
+            if colunas and "versao_livro" not in colunas:
+                conn.execute(db.text("ALTER TABLE SISTEMA_CONFIG ADD VERSAO_LIVRO VARCHAR2(20)"))
+                conn.execute(db.text(f"UPDATE SISTEMA_CONFIG SET VERSAO_LIVRO = '{APP_VERSION}'"))
+                conn.commit()
+                print("Coluna VERSAO_LIVRO adicionada à SISTEMA_CONFIG com sucesso.")
+    except Exception as e:
+        print(f"Aviso ao verificar SISTEMA_CONFIG: {e}")
 
 
 # =========================
-# DECORATORS
+# MIDDLEWARE E SEGURANÇA
 # =========================
+@app.before_request
+def check_app_version():
+    rotas_livres = ('static', 'serve_upload', 'versao_invalida', 'criar_banco')
+    if request.endpoint in rotas_livres:
+        return
+
+    try:
+        config_db = SistemaConfig.query.first()
+        
+        if config_db and config_db.versao_livro and config_db.versao_livro != APP_VERSION:
+            return redirect(url_for('versao_invalida'))
+    except Exception:
+        pass
+
+
+# ADICIONADO: Marca d'água invisível e indestrutível nas telas
+@app.after_request
+def add_watermark(response):
+    if response.content_type and response.content_type.startswith('text/html'):
+        watermark = b'<div style="position: fixed; bottom: 15px; right: 15px; opacity: 0.6; font-family: Arial, sans-serif; font-size: 13px; font-weight: bold; color: #888; z-index: 9999; pointer-events: none;">Powered by Security</div></body>'
+        response.data = response.data.replace(b'</body>', watermark)
+    return response
+
+
 def login_required(funcao):
     @wraps(funcao)
     def wrapper(*args, **kwargs):
@@ -208,7 +304,6 @@ def login_required(funcao):
             flash("Faça login para acessar o sistema.", "warning")
             return redirect(url_for("login"))
         return funcao(*args, **kwargs)
-
     return wrapper
 
 
@@ -222,8 +317,13 @@ def admin_required(funcao):
             flash("Apenas administradores podem acessar esta funcionalidade.", "danger")
             return redirect(url_for("index"))
         return funcao(*args, **kwargs)
-
     return wrapper
+
+
+def verificar_acesso_site(ocorrencia):
+    if session.get("user_role") == "ADMIN":
+        return True
+    return ocorrencia.site == normalizar_texto(session.get("user_site"))
 
 
 # =========================
@@ -236,19 +336,29 @@ def allowed_image_file(filename: str) -> bool:
     return ext in ALLOWED_IMAGE_EXTENSIONS
 
 
-def salvar_imagem_upload(file_storage, prefixo="img"):
+# ADICIONADO: Lógica de Compressão de Imagem
+def processar_imagem_base64(file_storage):
     if not file_storage or not getattr(file_storage, "filename", ""):
         return None
-
-    nome_original = file_storage.filename.strip()
-    if not allowed_image_file(nome_original):
+    if not allowed_image_file(file_storage.filename):
         return None
-
-    ext = nome_original.rsplit(".", 1)[1].lower()
-    nome_final = f"{prefixo}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.{ext}"
-    caminho = os.path.join(app.config["UPLOAD_FOLDER"], nome_final)
-    file_storage.save(caminho)
-    return nome_final
+    
+    try:
+        img = PILImage.open(file_storage)
+        
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+            
+        img.thumbnail((800, 800), PILImage.Resampling.LANCZOS)
+        
+        buffer = BytesIO()
+        img.save(buffer, format="JPEG", quality=70, optimize=True)
+        
+        encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        return f"data:image/jpeg;base64,{encoded}"
+    except Exception as e:
+        print(f"Erro ao processar imagem: {e}")
+        return None
 
 
 def normalizar_texto(valor: str) -> str:
@@ -314,9 +424,19 @@ def get_filtros_ocorrencias():
     data_final = (request.args.get("data_final") or "").strip()
     turno = normalizar_texto(request.args.get("turno"))
     status = normalizar_texto(request.args.get("status"))
-    site = normalizar_texto(request.args.get("site"))
+    
+    user_role = session.get("user_role")
+    user_site = session.get("user_site")
+    
+    if user_role != "ADMIN":
+        site_filtro = normalizar_texto(user_site)
+    else:
+        site_filtro = normalizar_texto(request.args.get("site"))
 
     query = OcorrenciaTurno.query
+
+    if site_filtro:
+        query = query.filter(OcorrenciaTurno.site == site_filtro)
 
     if data_inicial:
         di = parse_date_or_none(data_inicial)
@@ -334,9 +454,6 @@ def get_filtros_ocorrencias():
     if status:
         query = query.filter(OcorrenciaTurno.status == status)
 
-    if site:
-        query = query.filter(OcorrenciaTurno.site == site)
-
     query = query.order_by(
         OcorrenciaTurno.data_hora_registro.desc(),
         OcorrenciaTurno.id.desc(),
@@ -347,34 +464,42 @@ def get_filtros_ocorrencias():
         "data_final": data_final,
         "turno": turno,
         "status": status,
-        "site": site,
+        "site": site_filtro if user_role == "ADMIN" else "", 
     }
     return query, filtros
 
 
 def resumo_cards():
     hoje = date.today()
+    user_role = session.get("user_role")
+    user_site = normalizar_texto(session.get("user_site"))
+
+    def query_base(coluna):
+        q = db.session.query(coluna)
+        if user_role != "ADMIN":
+            q = q.filter(OcorrenciaTurno.site == user_site)
+        return q
 
     ocorrencias_dia = (
-        db.session.query(func.count(OcorrenciaTurno.id))
+        query_base(func.count(OcorrenciaTurno.id))
         .filter(OcorrenciaTurno.data_ocorrencia == hoje)
         .scalar()
     ) or 0
 
     pendencias_abertas = (
-        db.session.query(func.count(OcorrenciaTurno.id))
+        query_base(func.count(OcorrenciaTurno.id))
         .filter(OcorrenciaTurno.status.in_(["EM ABERTO", "EM ACOMPANHAMENTO"]))
         .scalar()
     ) or 0
 
     turnos_registrados = (
-        db.session.query(func.count(func.distinct(OcorrenciaTurno.turno)))
+        query_base(func.count(func.distinct(OcorrenciaTurno.turno)))
         .filter(OcorrenciaTurno.data_ocorrencia == hoje)
         .scalar()
     ) or 0
 
     ocorrencias_criticas = (
-        db.session.query(func.count(OcorrenciaTurno.id))
+        query_base(func.count(OcorrenciaTurno.id))
         .filter(OcorrenciaTurno.prioridade == "CRITICA")
         .scalar()
     ) or 0
@@ -428,6 +553,27 @@ def assinatura_base64_para_image(assinatura_b64, largura_mm=60, altura_mm=22):
     except Exception:
         return None
 
+# ADICIONADO: Compatibilidade do Base64 do banco de dados para PDF
+def fit_image_b64(base64_str, max_width, max_height):
+    if not base64_str:
+        return None
+    try:
+        if "," in base64_str:
+            _, encoded = base64_str.split(",", 1)
+        else:
+            encoded = base64_str
+            
+        img = Image(BytesIO(base64.b64decode(encoded)))
+        iw, ih = img.imageWidth, img.imageHeight
+        if not iw or not ih:
+            return None
+        proporcao = min(max_width / float(iw), max_height / float(ih))
+        img.drawWidth = iw * proporcao
+        img.drawHeight = ih * proporcao
+        return img
+    except Exception:
+        return None
+
 
 def fit_image(path, max_width, max_height):
     try:
@@ -444,8 +590,19 @@ def fit_image(path, max_width, max_height):
 
 
 # =========================
-# AUTH
+# ROTAS - AUTH E CONTROLE DE VERSÃO
 # =========================
+@app.route("/versao-invalida")
+def versao_invalida():
+    try:
+        config_db = SistemaConfig.query.first()
+        versao_exigida = config_db.versao_livro if config_db and config_db.versao_livro else "Desconhecida"
+    except Exception:
+        versao_exigida = "Desconhecida"
+
+    return render_template("versao_invalida.html", versao_local=APP_VERSION, versao_exigida=versao_exigida)
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -492,7 +649,7 @@ def criar_usuario():
         email = (request.form.get("email") or "").strip().lower()
         senha = request.form.get("senha") or ""
         role_solicitado = normalizar_texto(request.form.get("role") or "USER")
-        site = normalizar_texto(request.form.get("site"))
+        site = request.form.get("site")
 
         if not nome or not email or not senha:
             flash("Preencha nome, e-mail e senha.", "danger")
@@ -529,10 +686,13 @@ def criar_usuario():
 
         return redirect(url_for("usuarios"))
 
+    sites_db = Site.query.order_by(Site.nome_site.asc()).all()
+
     return render_template(
         "criar_usuario.html",
         permitir_admin_publico=admin_publico_liberado,
         usuario_logado_admin=usuario_logado_admin,
+        sites=sites_db
     )
 
 
@@ -554,7 +714,7 @@ def novo_usuario():
         email = (request.form.get("email") or "").strip().lower()
         senha = request.form.get("senha") or ""
         role = normalizar_texto(request.form.get("role") or "USER")
-        site = normalizar_texto(request.form.get("site"))
+        site = request.form.get("site")
 
         if not nome or not email or not senha:
             flash("Preencha nome, e-mail e senha.", "danger")
@@ -583,7 +743,9 @@ def novo_usuario():
         flash("Usuário criado com sucesso.", "success")
         return redirect(url_for("usuarios"))
 
-    return render_template("usuario_form.html", usuario=None)
+    sites_db = Site.query.order_by(Site.nome_site.asc()).all()
+
+    return render_template("usuario_form.html", usuario=None, sites=sites_db)
 
 
 @app.route("/usuarios/<int:user_id>/editar", methods=["GET", "POST"])
@@ -596,7 +758,7 @@ def editar_usuario(user_id):
         email = (request.form.get("email") or "").strip().lower()
         senha = (request.form.get("senha") or "").strip()
         role = normalizar_texto(request.form.get("role") or "USER")
-        site = normalizar_texto(request.form.get("site"))
+        site = request.form.get("site")
         is_active = (request.form.get("is_active") or "").strip() == "1"
 
         if not nome or not email:
@@ -630,7 +792,9 @@ def editar_usuario(user_id):
         flash("Usuário atualizado com sucesso.", "success")
         return redirect(url_for("usuarios"))
 
-    return render_template("usuario_form.html", usuario=usuario)
+    sites_db = Site.query.order_by(Site.nome_site.asc()).all()
+
+    return render_template("usuario_form.html", usuario=usuario, sites=sites_db)
 
 
 @app.route("/usuarios/<int:user_id>/excluir", methods=["POST"])
@@ -662,6 +826,15 @@ def index():
     ultimo_id = db.session.query(func.max(OcorrenciaTurno.id)).scalar() or 0
     proximo_id_previsto = ultimo_id + 1
 
+    user_site = session.get("user_site")
+    user_id = session.get("user_id")
+    if user_site:
+        usuarios_mesmo_site = User.query.filter(User.site == user_site, User.id != user_id, User.is_active == True).order_by(User.nome.asc()).all()
+    else:
+        usuarios_mesmo_site = User.query.filter(User.id != user_id, User.is_active == True).order_by(User.nome.asc()).all()
+
+    sites_db = Site.query.order_by(Site.nome_site.asc()).all()
+
     return render_template(
         "livro_ocorrencia.html",
         resumo=resumo_cards(),
@@ -670,13 +843,9 @@ def index():
         filtros=filtros,
         hoje=date.today().strftime("%Y-%m-%d"),
         proximo_id_previsto=proximo_id_previsto,
+        usuarios_mesmo_site=usuarios_mesmo_site,
+        sites=sites_db
     )
-
-
-@app.route("/uploads/<path:filename>")
-@login_required
-def serve_upload(filename):
-    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
 @app.route("/salvar-ocorrencia-turno", methods=["POST"])
@@ -686,18 +855,24 @@ def salvar_ocorrencia_turno():
         data_ocorrencia = parse_date_or_none(request.form.get("data_ocorrencia"))
         data_hora_registro = parse_datetime_local(request.form.get("data_hora_registro"))
 
-        site = normalizar_texto(request.form.get("site"))
+        if session.get("user_role") != "ADMIN":
+            site = session.get("user_site")
+        else:
+            site = request.form.get("site")
+            
         turno = normalizar_texto(request.form.get("turno"))
         setor = normalizar_texto(request.form.get("setor"))
         tipo_ocorrencia = normalizar_tipo(request.form.get("tipo_ocorrencia"))
         prioridade = normalizar_prioridade(request.form.get("prioridade"))
-        responsavel_saida = (request.form.get("responsavel_saida") or "").strip()
+        
+        responsavel_saida = session.get("username", "Usuário")
         responsavel_entrada = (request.form.get("responsavel_entrada") or "").strip()
+        
         descricao = (request.form.get("descricao") or "").strip()
         efetivo = (request.form.get("efetivo") or "").strip()
 
         assinatura_saida = request.form.get("assinatura_saida") or ""
-        assinatura_entrada = request.form.get("assinatura_entrada") or ""
+        assinatura_entrada = ""
 
         acoes_tomadas = (request.form.get("acoes_tomadas") or "").strip()
         pendencias = (request.form.get("pendencias") or "").strip()
@@ -717,13 +892,10 @@ def salvar_ocorrencia_turno():
                 descricao,
                 efetivo,
                 status,
+                assinatura_saida
             ]
         ):
-            flash("Preencha todos os campos obrigatórios.", "danger")
-            return redirect(url_for("index"))
-
-        if site not in SITES_VALIDOS:
-            flash("Site inválido.", "danger")
+            flash("Preencha todos os campos obrigatórios e realize sua assinatura.", "danger")
             return redirect(url_for("index"))
 
         if turno not in TURNOS_VALIDOS:
@@ -738,10 +910,11 @@ def salvar_ocorrencia_turno():
             flash("Status inválido.", "danger")
             return redirect(url_for("index"))
 
-        imagem_1 = salvar_imagem_upload(request.files.get("imagem_1"), "ocorrencia_1")
-        imagem_2 = salvar_imagem_upload(request.files.get("imagem_2"), "ocorrencia_2")
-        imagem_3 = salvar_imagem_upload(request.files.get("imagem_3"), "ocorrencia_3")
-        imagem_4 = salvar_imagem_upload(request.files.get("imagem_4"), "ocorrencia_4")
+        # ALTERAÇÃO: Processa as imagens para Base64 antes de salvar
+        imagem_1 = processar_imagem_base64(request.files.get("imagem_1"))
+        imagem_2 = processar_imagem_base64(request.files.get("imagem_2"))
+        imagem_3 = processar_imagem_base64(request.files.get("imagem_3"))
+        imagem_4 = processar_imagem_base64(request.files.get("imagem_4"))
 
         nova = OcorrenciaTurno(
             data_ocorrencia=data_ocorrencia,
@@ -755,8 +928,8 @@ def salvar_ocorrencia_turno():
             responsavel_entrada=responsavel_entrada,
             descricao=descricao,
             efetivo=efetivo,
-            assinatura_saida=assinatura_saida or None,
-            assinatura_entrada=assinatura_entrada or None,
+            assinatura_saida=assinatura_saida,
+            assinatura_entrada=None,
             imagem_1=imagem_1,
             imagem_2=imagem_2,
             imagem_3=imagem_3,
@@ -770,7 +943,7 @@ def salvar_ocorrencia_turno():
         db.session.add(nova)
         db.session.commit()
 
-        flash("Ocorrência registrada com sucesso.", "success")
+        flash("Ocorrência registrada com sucesso. Aguardando assinatura do recebedor.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Erro ao salvar ocorrência: {e}", "danger")
@@ -778,10 +951,43 @@ def salvar_ocorrencia_turno():
     return redirect(url_for("index"))
 
 
+@app.route("/ocorrencias/<int:ocorrencia_id>/assinar", methods=["GET", "POST"])
+@login_required
+def assinar_recebimento(ocorrencia_id):
+    ocorrencia = OcorrenciaTurno.query.get_or_404(ocorrencia_id)
+    
+    if not verificar_acesso_site(ocorrencia):
+        flash("Acesso negado. Esta ocorrência pertence a outro site.", "danger")
+        return redirect(url_for("index"))
+    
+    if ocorrencia.responsavel_entrada != session.get("username"):
+        flash("Você não é o responsável designado para receber este turno.", "danger")
+        return redirect(url_for("index"))
+        
+    if request.method == "POST":
+        assinatura = request.form.get("assinatura_entrada")
+        if not assinatura:
+            flash("A assinatura é obrigatória para receber o turno.", "danger")
+            return redirect(url_for("assinar_recebimento", ocorrencia_id=ocorrencia.id))
+            
+        ocorrencia.assinatura_entrada = assinatura
+        ocorrencia.updated_at = datetime.now()
+        db.session.commit()
+        
+        flash("Recebimento de turno assinado com sucesso! Você já pode finalizar a ocorrência.", "success")
+        return redirect(url_for("index"))
+        
+    return render_template("assinar_recebimento.html", ocorrencia=ocorrencia)
+
+
 @app.route("/ocorrencias/<int:ocorrencia_id>/editar", methods=["GET", "POST"])
 @login_required
 def editar_ocorrencia(ocorrencia_id):
     ocorrencia = OcorrenciaTurno.query.get_or_404(ocorrencia_id)
+    
+    if not verificar_acesso_site(ocorrencia):
+        flash("Acesso negado. Esta ocorrência pertence a outro site.", "danger")
+        return redirect(url_for("index"))
 
     if request.method == "POST":
         try:
@@ -790,31 +996,26 @@ def editar_ocorrencia(ocorrencia_id):
                 request.form.get("data_hora_registro")
             )
 
-            ocorrencia.site = normalizar_texto(request.form.get("site"))
+            if session.get("user_role") == "ADMIN":
+                ocorrencia.site = request.form.get("site")
+                
             ocorrencia.turno = normalizar_texto(request.form.get("turno"))
             ocorrencia.setor = normalizar_texto(request.form.get("setor"))
             ocorrencia.tipo_ocorrencia = normalizar_tipo(request.form.get("tipo_ocorrencia"))
             ocorrencia.prioridade = normalizar_prioridade(request.form.get("prioridade"))
-            ocorrencia.responsavel_saida = (request.form.get("responsavel_saida") or "").strip()
-            ocorrencia.responsavel_entrada = (
-                request.form.get("responsavel_entrada") or ""
-            ).strip()
             ocorrencia.descricao = (request.form.get("descricao") or "").strip()
             ocorrencia.efetivo = (request.form.get("efetivo") or "").strip()
 
             assinatura_saida_recebida = request.form.get("assinatura_saida") or ""
-            assinatura_entrada_recebida = request.form.get("assinatura_entrada") or ""
 
             if assinatura_saida_recebida:
                 ocorrencia.assinatura_saida = assinatura_saida_recebida
 
-            if assinatura_entrada_recebida:
-                ocorrencia.assinatura_entrada = assinatura_entrada_recebida
-
-            nova_imagem_1 = salvar_imagem_upload(request.files.get("imagem_1"), "ocorrencia_1")
-            nova_imagem_2 = salvar_imagem_upload(request.files.get("imagem_2"), "ocorrencia_2")
-            nova_imagem_3 = salvar_imagem_upload(request.files.get("imagem_3"), "ocorrencia_3")
-            nova_imagem_4 = salvar_imagem_upload(request.files.get("imagem_4"), "ocorrencia_4")
+            # ALTERAÇÃO: Processa a imagem base64 se ela for enviada
+            nova_imagem_1 = processar_imagem_base64(request.files.get("imagem_1"))
+            nova_imagem_2 = processar_imagem_base64(request.files.get("imagem_2"))
+            nova_imagem_3 = processar_imagem_base64(request.files.get("imagem_3"))
+            nova_imagem_4 = processar_imagem_base64(request.files.get("imagem_4"))
 
             if nova_imagem_1:
                 ocorrencia.imagem_1 = nova_imagem_1
@@ -839,18 +1040,12 @@ def editar_ocorrencia(ocorrencia_id):
                     ocorrencia.setor,
                     ocorrencia.tipo_ocorrencia,
                     ocorrencia.prioridade,
-                    ocorrencia.responsavel_saida,
-                    ocorrencia.responsavel_entrada,
                     ocorrencia.descricao,
                     ocorrencia.efetivo,
                     ocorrencia.status,
                 ]
             ):
                 flash("Preencha todos os campos obrigatórios.", "danger")
-                return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
-
-            if ocorrencia.site not in SITES_VALIDOS:
-                flash("Site inválido.", "danger")
                 return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
 
             if ocorrencia.turno not in TURNOS_VALIDOS:
@@ -874,11 +1069,13 @@ def editar_ocorrencia(ocorrencia_id):
             flash(f"Erro ao atualizar ocorrência: {e}", "danger")
             return redirect(url_for("editar_ocorrencia", ocorrencia_id=ocorrencia.id))
 
+    sites_db = Site.query.order_by(Site.nome_site.asc()).all()
     return render_template(
         "ocorrencia_form.html",
         ocorrencia=ocorrencia,
         data_ocorrencia_value=format_date_input(ocorrencia.data_ocorrencia),
         data_hora_value=format_datetime_local_input(ocorrencia.data_hora_registro),
+        sites=sites_db
     )
 
 
@@ -886,6 +1083,18 @@ def editar_ocorrencia(ocorrencia_id):
 @login_required
 def fechar_ocorrencia(ocorrencia_id):
     ocorrencia = OcorrenciaTurno.query.get_or_404(ocorrencia_id)
+    
+    if not verificar_acesso_site(ocorrencia):
+        flash("Acesso negado. Esta ocorrência pertence a outro site.", "danger")
+        return redirect(url_for("index"))
+
+    if ocorrencia.responsavel_entrada != session.get("username"):
+        flash("Apenas o responsável que assumiu o turno pode finalizar esta ocorrência.", "danger")
+        return redirect(url_for("index"))
+
+    if not ocorrencia.assinatura_entrada:
+        flash("Você precisa assinar o recebimento do turno antes de poder finalizar a ocorrência.", "warning")
+        return redirect(url_for("index"))
 
     try:
         ocorrencia.status = "FINALIZADO"
@@ -903,6 +1112,10 @@ def fechar_ocorrencia(ocorrencia_id):
 @login_required
 def excluir_ocorrencia(ocorrencia_id):
     ocorrencia = OcorrenciaTurno.query.get_or_404(ocorrencia_id)
+    if not verificar_acesso_site(ocorrencia):
+        flash("Acesso negado. Esta ocorrência pertence a outro site.", "danger")
+        return redirect(url_for("index"))
+        
     try:
         db.session.delete(ocorrencia)
         db.session.commit()
@@ -919,46 +1132,61 @@ def excluir_ocorrencia(ocorrencia_id):
 @app.route("/dashboard-ocorrencias")
 @login_required
 def dashboard_ocorrencias():
-    total = db.session.query(func.count(OcorrenciaTurno.id)).scalar() or 0
+    user_role = session.get("user_role")
+    user_site = normalizar_texto(session.get("user_site"))
+
+    def query_dash(coluna):
+        q = db.session.query(coluna)
+        if user_role != "ADMIN":
+            q = q.filter(OcorrenciaTurno.site == user_site)
+        return q
+
+    total = query_dash(func.count(OcorrenciaTurno.id)).scalar() or 0
     em_aberto = (
-        db.session.query(func.count(OcorrenciaTurno.id))
+        query_dash(func.count(OcorrenciaTurno.id))
         .filter(OcorrenciaTurno.status == "EM ABERTO")
         .scalar()
         or 0
     )
     acompanhamento = (
-        db.session.query(func.count(OcorrenciaTurno.id))
+        query_dash(func.count(OcorrenciaTurno.id))
         .filter(OcorrenciaTurno.status == "EM ACOMPANHAMENTO")
         .scalar()
         or 0
     )
     finalizado = (
-        db.session.query(func.count(OcorrenciaTurno.id))
+        query_dash(func.count(OcorrenciaTurno.id))
         .filter(OcorrenciaTurno.status == "FINALIZADO")
         .scalar()
         or 0
     )
 
     por_turno = (
-        db.session.query(OcorrenciaTurno.turno, func.count(OcorrenciaTurno.id))
+        query_dash(func.count(OcorrenciaTurno.id))
+        .add_columns(OcorrenciaTurno.turno)
         .group_by(OcorrenciaTurno.turno)
         .order_by(ordenar_turnos_query())
         .all()
     )
+    por_turno = [(row[1], row[0]) for row in por_turno]
 
     por_prioridade = (
-        db.session.query(OcorrenciaTurno.prioridade, func.count(OcorrenciaTurno.id))
+        query_dash(func.count(OcorrenciaTurno.id))
+        .add_columns(OcorrenciaTurno.prioridade)
         .group_by(OcorrenciaTurno.prioridade)
         .order_by(ordenar_prioridade_query())
         .all()
     )
+    por_prioridade = [(row[1], row[0]) for row in por_prioridade]
 
     por_site = (
-        db.session.query(OcorrenciaTurno.site, func.count(OcorrenciaTurno.id))
+        query_dash(func.count(OcorrenciaTurno.id))
+        .add_columns(OcorrenciaTurno.site)
         .group_by(OcorrenciaTurno.site)
         .order_by(OcorrenciaTurno.site.asc())
         .all()
     )
+    por_site = [(row[1], row[0]) for row in por_site]
 
     return render_template(
         "dashboard_ocorrencias.html",
@@ -1002,10 +1230,6 @@ def export_ocorrencias_excel():
         "Pendências",
         "Assinatura Saída",
         "Assinatura Entrada",
-        "Imagem 1",
-        "Imagem 2",
-        "Imagem 3",
-        "Imagem 4",
         "Status",
         "Criado por",
         "Criado em",
@@ -1041,10 +1265,6 @@ def export_ocorrencias_excel():
                 r.pendencias or "",
                 "SIM" if r.assinatura_saida else "NÃO",
                 "SIM" if r.assinatura_entrada else "NÃO",
-                r.imagem_1 or "",
-                r.imagem_2 or "",
-                r.imagem_3 or "",
-                r.imagem_4 or "",
                 r.status,
                 r.criado_por or "",
                 r.created_at.strftime("%d/%m/%Y %H:%M") if r.created_at else "",
@@ -1083,6 +1303,9 @@ def export_ocorrencias_excel():
 @login_required
 def export_ocorrencia_individual_pdf(ocorrencia_id):
     ocorrencia = OcorrenciaTurno.query.get_or_404(ocorrencia_id)
+    if not verificar_acesso_site(ocorrencia):
+        flash("Acesso negado. Esta ocorrência pertence a outro site.", "danger")
+        return redirect(url_for("index"))
 
     output = BytesIO()
     doc = SimpleDocTemplate(
@@ -1260,12 +1483,8 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         ocorrencia.imagem_4,
     ]
 
-    caminhos_validos = []
-    for nome_img in imagens_registro:
-        if nome_img:
-            caminho = os.path.join(app.config["UPLOAD_FOLDER"], nome_img)
-            if os.path.exists(caminho):
-                caminhos_validos.append(caminho)
+    # ALTERAÇÃO: Lê as imagens a partir do Base64
+    caminhos_validos = [img for img in imagens_registro if img and img.startswith("data:image")]
 
     if caminhos_validos:
         elements.append(Paragraph("Evidências fotográficas", secao_style))
@@ -1275,7 +1494,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         if qtd == 1:
             fotos = []
             for caminho in caminhos_validos:
-                img = fit_image(caminho, 500, 180)
+                img = fit_image_b64(caminho, 500, 180)
                 if img:
                     fotos.append([img])
             tabela_fotos = Table(fotos, colWidths=[540], hAlign="CENTER")
@@ -1283,7 +1502,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         elif qtd == 2:
             linha = []
             for caminho in caminhos_validos:
-                img = fit_image(caminho, 250, 160)
+                img = fit_image_b64(caminho, 250, 160)
                 linha.append(img if img else "")
             tabela_fotos = Table([linha], colWidths=[270, 270], hAlign="CENTER")
 
@@ -1291,7 +1510,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
             fotos = []
             linha = []
             for caminho in caminhos_validos:
-                img = fit_image(caminho, 250, 100)
+                img = fit_image_b64(caminho, 250, 100)
                 linha.append(img if img else "")
                 if len(linha) == 2:
                     fotos.append(linha)
@@ -1724,6 +1943,7 @@ def export_ocorrencias_pdf():
 def criar_banco():
     db.create_all()
     garantir_colunas_ocorrencias()
+    garantir_colunas_sistema_config()
 
     admin = User.query.filter_by(email="admin@dhl.com").first()
     if not admin:
@@ -1740,11 +1960,17 @@ def criar_banco():
 
     return "Banco criado com sucesso. Login padrão: admin@dhl.com / 123456"
 
+# =========================
+# INICIALIZAÇÃO WEBVIEW
+# =========================
+def start_flask():
+    app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         garantir_colunas_ocorrencias()
+        garantir_colunas_sistema_config()
 
         admin = User.query.filter_by(email="admin@dhl.com").first()
         if not admin:
@@ -1759,4 +1985,9 @@ if __name__ == "__main__":
             db.session.add(admin)
             db.session.commit()
 
-    app.run(debug=True)
+    t = Thread(target=start_flask)
+    t.daemon = True
+    t.start()
+
+    webview.create_window('Livro de Ocorrências DHL Security', 'http://127.0.0.1:5000', width=1280, height=850, resizable=True)
+    webview.start()

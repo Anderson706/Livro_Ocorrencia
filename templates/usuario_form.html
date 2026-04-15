@@ -453,11 +453,13 @@
 
               <div class="field">
                 <label for="site">Site</label>
-                <select id="site" name="site">
+                <select id="site" name="site" required>
                   <option value="">Selecione</option>
-                  <option value="SITE 1" {% if usuario and usuario.site == 'SITE 1' %}selected{% endif %}>P&G</option>
-                  <option value="SITE 2" {% if usuario and usuario.site == 'SITE 2' %}selected{% endif %}>SHEIN</option>
-                  <option value="SITE 3" {% if usuario and usuario.site == 'SITE 3' %}selected{% endif %}>ADIDDAS</option>
+                  {% for s in sites %}
+                    <option value="{{ s.nome_site }}" {% if usuario and usuario.site == s.nome_site %}selected{% endif %}>
+                      {{ s.nome_site }}
+                    </option>
+                  {% endfor %}
                 </select>
               </div>
             </div>

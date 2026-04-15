@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Versão Desatualizada | Livro de Ocorrência{% endblock %}
+
+{% block body %}
+<style>
+  :root{
+    --dhl-yellow:#ffcc00;
+    --dhl-red:#d40511;
+    --dhl-red-dark:#b3030e;
+    --dhl-black:#1f1f1f;
+    --bg:#f4f5f7;
+    --card:#ffffff;
+    --line:#e5e7eb;
+    --text:#1f2937;
+    --muted:#6b7280;
+    --shadow:0 12px 30px rgba(0,0,0,.15);
+  }
+
+  body {
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+  }
+
+  .lock-container {
+    width: 100%;
+    max-width: 500px;
+    padding: 20px;
+  }
+
+  .lock-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    text-align: center;
+  }
+
+  .lock-header {
+    background: linear-gradient(135deg, var(--dhl-red), var(--dhl-red-dark));
+    color: #fff;
+    padding: 30px 20px;
+  }
+
+  .lock-header h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+  }
+
+  .lock-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .lock-body {
+    padding: 30px 24px;
+  }
+
+  .lock-body p {
+    margin: 0 0 16px 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .version-info {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin: 24px 0;
+    padding: 16px;
+    background: #fff8db;
+    border: 1px solid #f3d56c;
+    border-radius: 12px;
+  }
+
+  .version-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .version-label {
+    font-size: 11px;
+    color: #7a5a00;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .version-number {
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--dhl-black);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 15px;
+    cursor: pointer;
+    text-decoration: none;
+    background: linear-gradient(180deg, var(--dhl-yellow), #f1be00);
+    color: var(--dhl-black);
+    transition: transform 0.2s ease;
+  }
+
+  .btn:hover {
+    transform: translateY(-2px);
+  }
+</style>
+
+<div class="lock-container">
+  <div class="lock-card">
+    <div class="lock-header">
+      <span class="lock-icon">⚠️</span>
+      <h1>Acesso Bloqueado</h1>
+    </div>
+    
+    <div class="lock-body">
+      <p>
+        <strong>Sua versão do aplicativo está desatualizada.</strong><br>
+        Para garantir a segurança e a integridade das informações operacionais, você precisa atualizar o executável do sistema.
+      </p>
+
+      <div class="version-info">
+        <div class="version-box">
+          <span class="version-label">Sua Versão Local</span>
+          <span class="version-number" style="color: var(--dhl-red);">v{{ versao_local }}</span>
+        </div>
+        <div class="version-box">
+          <span class="version-label">Versão Exigida</span>
+          <span class="version-number" style="color: #15803d;">v{{ versao_exigida }}</span>
+        </div>
+      </div>
+
+      <p style="font-size: 13px; color: var(--muted); margin-bottom: 24px;">
+        Por favor, solicite a versão mais recente para incluirmos no fluxo de deploy da sua unidade.
+      </p>
+
+      <a href="mailto:deivid.martinsl@dhl.com?subject=Solicitação de Atualização - Livro de Ocorrências&body=Olá Deivid,%0D%0A%0D%0AMinha versão do Livro de Ocorrências (v{{ versao_local }}) está desatualizada.%0D%0APor favor, me envie a versão mais recente (v{{ versao_exigida }}) para atualização no posto.%0D%0A%0D%0AUnidade/Site:%0D%0AUsuário:" class="btn">
+        ✉️ Enviar e-mail solicitando atualização
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

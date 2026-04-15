@@ -505,6 +505,12 @@
       gap:8px;
       transition:.18s ease;
     }
+    
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
 
     .btn:hover{ transform:translateY(-1px); }
 
@@ -779,6 +785,7 @@
       display:flex;
       gap:6px;
       flex-wrap:wrap;
+      align-items: center;
     }
 
     .top-actions{
@@ -1062,15 +1069,22 @@
 
               <div style="height:12px"></div>
 
-              <div class="row">
-                <div class="field">
-                  <label>Responsável que está saindo</label>
-                  <input type="text" name="responsavel_saida" required>
-                </div>
-                <div class="field">
-                  <label>Responsável que está assumindo</label>
-                  <input type="text" name="responsavel_entrada" required>
-                </div>
+              <div class="field">
+                <label>Responsável que está saindo (Você)</label>
+                <input type="text" name="responsavel_saida" value="{{ session.get('username') }}" readonly class="readonly-field">
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="field">
+                <label>Responsável que está assumindo {% if session.get('user_site') %}(Site: {{ session.get('user_site') }}){% endif %}</label>
+                <select name="responsavel_entrada" required>
+                  <option value="">Selecione quem vai receber o turno...</option>
+                  {% for u in usuarios_mesmo_site %}
+                    <option value="{{ u.nome }}">{{ u.nome }}</option>
+                  {% endfor %}
+                </select>
+                <div class="small">Apenas usuários ativos do seu site aparecem aqui. Eles assinarão após o login deles.</div>
               </div>
 
               <div style="height:12px"></div>
@@ -1104,15 +1118,15 @@
               <div style="height:12px"></div>
 
               <div class="field">
-                <label>Assinaturas</label>
+                <label>Assinatura</label>
 
-                <div class="signature-grid">
+                <div class="signature-grid" style="grid-template-columns: 1fr;">
                   <div class="signature-card">
-                    <h4>Assinatura - Responsável que está saindo</h4>
+                    <h4>Sua Assinatura (Passagem de Turno)</h4>
 
                     <div class="signature-wrapper">
                       <canvas id="signature-pad-saida" class="signature-pad"></canvas>
-                      <input type="hidden" name="assinatura_saida" id="assinatura_saida">
+                      <input type="hidden" name="assinatura_saida" id="assinatura_saida" required>
 
                       <div class="signature-toolbar">
                         <button type="button" class="btn btn-dark" onclick="limparAssinaturaSaida()">
@@ -1121,26 +1135,7 @@
                       </div>
 
                       <div class="small">
-                        Assine no quadro acima usando o mouse ou o dedo na tela.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="signature-card">
-                    <h4>Assinatura - Responsável que está assumindo</h4>
-
-                    <div class="signature-wrapper">
-                      <canvas id="signature-pad-entrada" class="signature-pad"></canvas>
-                      <input type="hidden" name="assinatura_entrada" id="assinatura_entrada">
-
-                      <div class="signature-toolbar">
-                        <button type="button" class="btn btn-dark" onclick="limparAssinaturaEntrada()">
-                          Limpar assinatura
-                        </button>
-                      </div>
-
-                      <div class="small">
-                        Assine no quadro acima usando o mouse ou o dedo na tela.
+                        Assine no quadro acima usando o mouse ou o dedo na tela. O recebedor assinará no próprio perfil dele.
                       </div>
                     </div>
                   </div>
@@ -1180,7 +1175,7 @@
               </div>
 
               <div class="actions">
-                <button type="submit" class="btn btn-red">Salvar ocorrência</button>
+                <button type="submit" class="btn btn-red" onclick="return validarAssinatura()">Salvar ocorrência</button>
                 <a href="{{ url_for('export_ocorrencias_excel', data_inicial=filtros['data_inicial'], data_final=filtros['data_final'], turno=filtros['turno'], status=filtros['status'], site=filtros['site']) }}" class="btn btn-dark">Exportar Excel</a>
                 <a href="{{ url_for('export_ocorrencias_pdf', data_inicial=filtros['data_inicial'], data_final=filtros['data_final'], turno=filtros['turno'], status=filtros['status'], site=filtros['site']) }}" class="btn btn-soft">Exportar PDF</a>
               </div>
@@ -1203,8 +1198,14 @@
                   <a href="{{ url_for('export_ocorrencia_individual_pdf', ocorrencia_id=ultima_ocorrencia.id) }}" class="btn btn-dark">
                     Exportar esta ocorrência em PDF
                   </a>
+                  
+                  {% if not ultima_ocorrencia.assinatura_entrada and ultima_ocorrencia.responsavel_entrada == session.get('username') %}
+                    <a href="{{ url_for('assinar_recebimento', ocorrencia_id=ultima_ocorrencia.id) }}" class="btn btn-primary">
+                      Assinar Recebimento
+                    </a>
+                  {% endif %}
 
-                  {% if ultima_ocorrencia.status != 'FINALIZADO' %}
+                  {% if ultima_ocorrencia.status != 'FINALIZADO' and ultima_ocorrencia.assinatura_entrada and ultima_ocorrencia.responsavel_entrada == session.get('username') %}
                     <form method="POST"
                           action="{{ url_for('fechar_ocorrencia', ocorrencia_id=ultima_ocorrencia.id) }}"
                           class="inline-form"
@@ -1267,7 +1268,7 @@
                           <img src="{{ ultima_ocorrencia.assinatura_entrada }}" alt="Assinatura entrada">
                         </div>
                       {% else %}
-                        <div>-</div>
+                        <div style="color:var(--dhl-red); font-weight: bold; margin: 20px 0;">Aguardando assinatura no perfil do recebedor...</div>
                       {% endif %}
 
                       <div class="assinatura-line"></div>
@@ -1454,7 +1455,7 @@
                       {% if r.assinatura_entrada %}
                         <img src="{{ r.assinatura_entrada }}" alt="Assinatura entrada" style="max-width:140px; max-height:50px; display:block;">
                       {% else %}
-                        -
+                        Pendente
                       {% endif %}
                     </td>
 
@@ -1473,14 +1474,18 @@
 
                     <td>
                       <div class="table-actions">
-                        <a href="{{ url_for('export_ocorrencia_individual_pdf', ocorrencia_id=r.id) }}" class="btn btn-dark">PDF</a>
+                        <a href="{{ url_for('export_ocorrencia_individual_pdf', ocorrencia_id=r.id) }}" class="btn btn-dark btn-sm">PDF</a>
+                        
+                        {% if not r.assinatura_entrada and r.responsavel_entrada == session.get('username') %}
+                           <a href="{{ url_for('assinar_recebimento', ocorrencia_id=r.id) }}" class="btn btn-primary btn-sm">Assinar</a>
+                        {% endif %}
 
-                        {% if r.status != 'FINALIZADO' %}
+                        {% if r.status != 'FINALIZADO' and r.assinatura_entrada and r.responsavel_entrada == session.get('username') %}
                           <form method="POST"
                                 action="{{ url_for('fechar_ocorrencia', ocorrencia_id=r.id) }}"
                                 class="inline-form"
                                 onsubmit="return confirm('Deseja finalizar esta ocorrência?');">
-                            <button type="submit" class="btn btn-close">Finalizar</button>
+                            <button type="submit" class="btn btn-close btn-sm">Finalizar</button>
                           </form>
                         {% endif %}
                       </div>
@@ -1595,14 +1600,18 @@
   }
 
   const assinaturaSaidaPad = iniciarSignaturePad("signature-pad-saida", "assinatura_saida");
-  const assinaturaEntradaPad = iniciarSignaturePad("signature-pad-entrada", "assinatura_entrada");
 
   function limparAssinaturaSaida() {
     if (assinaturaSaidaPad) assinaturaSaidaPad.limpar();
   }
-
-  function limparAssinaturaEntrada() {
-    if (assinaturaEntradaPad) assinaturaEntradaPad.limpar();
+  
+  function validarAssinatura() {
+    const input = document.getElementById("assinatura_saida");
+    if (!input.value) {
+      alert("Por favor, preencha a assinatura antes de salvar.");
+      return false;
+    }
+    return true;
   }
 </script>
 

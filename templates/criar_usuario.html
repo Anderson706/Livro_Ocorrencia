@@ -219,7 +219,12 @@
 
         <div>
           <label for="site">Site</label>
-          <input type="text" id="site" name="site">
+          <select id="site" name="site" required>
+            <option value="">Selecione um site</option>
+            {% for s in sites %}
+              <option value="{{ s.nome_site }}">{{ s.nome_site }}</option>
+            {% endfor %}
+          </select>
         </div>
 
         <div class="full">
