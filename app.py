@@ -1,8 +1,8 @@
 import os
 import sys
 import base64
-import webview               # ADICIONADO: WebView
-from threading import Thread # ADICIONADO: Thread
+import webview               # <-- ADICIONADO: Webview
+from threading import Thread # <-- ADICIONADO: Thread
 from io import BytesIO
 from html import escape
 from datetime import datetime, date
@@ -44,7 +44,7 @@ from reportlab.platypus import (
     KeepTogether,
 )
 
-from PIL import Image as PILImage # ADICIONADO: Compressor de Imagens
+from PIL import Image as PILImage # <-- ADICIONADO: Biblioteca para comprimir imagens
 
 # =========================
 # FUNÇÃO PARA O PYINSTALLER
@@ -81,6 +81,16 @@ if not all([DB_USER, DB_PASS, DB_HOST, DB_SERVICE]):
 
 app.config["SQLALCHEMY_DATABASE_URI"] = f"oracle+oracledb://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/?service_name={DB_SERVICE}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# A pasta de uploads DEVE ficar sempre ao lado do .exe, nunca na pasta temporária
+if getattr(sys, 'frozen', False):
+    exe_dir = os.path.dirname(sys.executable)
+else:
+    exe_dir = os.path.dirname(os.path.abspath(__file__))
+
+UPLOAD_FOLDER = os.path.join(exe_dir, "uploads")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
@@ -168,7 +178,7 @@ class OcorrenciaTurno(db.Model):
     assinatura_saida = db.Column(db.Text, nullable=True)
     assinatura_entrada = db.Column(db.Text, nullable=True)
 
-    # ALTERAÇÃO: O banco agora espera Text (CLOB no Oracle) para aguentar o Base64 Longo
+    # <-- ALTERADO: String(255) alterado para Text (CLOB no Oracle) para suportar as imagens base64 -->
     imagem_1 = db.Column(db.Text, nullable=True)
     imagem_2 = db.Column(db.Text, nullable=True)
     imagem_3 = db.Column(db.Text, nullable=True)
@@ -234,7 +244,7 @@ def garantir_colunas_ocorrencias():
             if "assinatura_entrada" not in colunas:
                 comandos.append("ALTER TABLE ocorrencias_turno ADD assinatura_entrada CLOB")
 
-            # ALTERAÇÃO: Força o CLOB se for criar a coluna do zero
+            # <-- ALTERADO: Colunas de imagem geradas como CLOB direto caso a tabela seja nova -->
             if "imagem_1" not in colunas:
                 comandos.append("ALTER TABLE ocorrencias_turno ADD imagem_1 CLOB")
 
@@ -288,7 +298,7 @@ def check_app_version():
         pass
 
 
-# ADICIONADO: Marca d'água invisível e indestrutível nas telas
+# <-- ADICIONADO: Marca d'água persistente via HTML -->
 @app.after_request
 def add_watermark(response):
     if response.content_type and response.content_type.startswith('text/html'):
@@ -336,24 +346,34 @@ def allowed_image_file(filename: str) -> bool:
     return ext in ALLOWED_IMAGE_EXTENSIONS
 
 
-# ADICIONADO: Lógica de Compressão de Imagem
+def salvar_imagem_upload(file_storage, prefixo="img"):
+    if not file_storage or not getattr(file_storage, "filename", ""):
+        return None
+
+    nome_original = file_storage.filename.strip()
+    if not allowed_image_file(nome_original):
+        return None
+
+    ext = nome_original.rsplit(".", 1)[1].lower()
+    nome_final = f"{prefixo}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.{ext}"
+    caminho = os.path.join(app.config["UPLOAD_FOLDER"], nome_final)
+    file_storage.save(caminho)
+    return nome_final
+
+
+# <-- ADICIONADO: Compressor de Imagens Base64 para poupar espaço -->
 def processar_imagem_base64(file_storage):
     if not file_storage or not getattr(file_storage, "filename", ""):
         return None
     if not allowed_image_file(file_storage.filename):
         return None
-    
     try:
         img = PILImage.open(file_storage)
-        
         if img.mode != 'RGB':
             img = img.convert('RGB')
-            
         img.thumbnail((800, 800), PILImage.Resampling.LANCZOS)
-        
         buffer = BytesIO()
         img.save(buffer, format="JPEG", quality=70, optimize=True)
-        
         encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
         return f"data:image/jpeg;base64,{encoded}"
     except Exception as e:
@@ -415,8 +435,9 @@ def format_datetime_local_input(value):
     return value.strftime("%Y-%m-%dT%H:%M")
 
 
-def pdf_safe(texto):
-    return escape(texto or "-")
+def pdf_safe(texto): 
+    if not texto: return "-"
+    return escape(str(texto)).replace('\n', '<br/>')
 
 
 def get_filtros_ocorrencias():
@@ -537,6 +558,7 @@ def ordenar_prioridade_query():
     )
 
 
+# <-- ALTERADO: Inclusão do fix de buffer (seek 0) e padding para não dar erro no PDF -->
 def assinatura_base64_para_image(assinatura_b64, largura_mm=60, altura_mm=22):
     if not assinatura_b64:
         return None
@@ -547,13 +569,16 @@ def assinatura_base64_para_image(assinatura_b64, largura_mm=60, altura_mm=22):
         else:
             encoded = assinatura_b64
 
+        encoded += "=" * ((4 - len(encoded) % 4) % 4) 
         image_bytes = base64.b64decode(encoded)
         buffer = BytesIO(image_bytes)
+        buffer.seek(0) 
         return Image(buffer, width=largura_mm * mm, height=altura_mm * mm)
     except Exception:
         return None
 
-# ADICIONADO: Compatibilidade do Base64 do banco de dados para PDF
+
+# <-- ADICIONADO: Helper para desenhar as fotos do Banco direto no PDF -->
 def fit_image_b64(base64_str, max_width, max_height):
     if not base64_str:
         return None
@@ -562,8 +587,12 @@ def fit_image_b64(base64_str, max_width, max_height):
             _, encoded = base64_str.split(",", 1)
         else:
             encoded = base64_str
-            
-        img = Image(BytesIO(base64.b64decode(encoded)))
+        
+        encoded += "=" * ((4 - len(encoded) % 4) % 4) 
+        buffer = BytesIO(base64.b64decode(encoded))
+        buffer.seek(0) 
+        
+        img = Image(buffer)
         iw, ih = img.imageWidth, img.imageHeight
         if not iw or not ih:
             return None
@@ -571,7 +600,8 @@ def fit_image_b64(base64_str, max_width, max_height):
         img.drawWidth = iw * proporcao
         img.drawHeight = ih * proporcao
         return img
-    except Exception:
+    except Exception as e:
+        print(f"Erro pdf fit_image_b64: {e}")
         return None
 
 
@@ -703,7 +733,9 @@ def criar_usuario():
 @admin_required
 def usuarios():
     lista = User.query.order_by(User.nome.asc()).all()
-    return render_template("usuarios.html", usuarios=lista)
+    # <-- ALTERADO: Correção do Erro 500 no botão de editar usuário -->
+    sites_db = Site.query.order_by(Site.nome_site.asc()).all()
+    return render_template("usuarios.html", usuarios=lista, sites=sites_db)
 
 
 @app.route("/usuarios/novo", methods=["GET", "POST"])
@@ -848,6 +880,12 @@ def index():
     )
 
 
+@app.route("/uploads/<path:filename>")
+@login_required
+def serve_upload(filename):
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+
+
 @app.route("/salvar-ocorrencia-turno", methods=["POST"])
 @login_required
 def salvar_ocorrencia_turno():
@@ -910,7 +948,7 @@ def salvar_ocorrencia_turno():
             flash("Status inválido.", "danger")
             return redirect(url_for("index"))
 
-        # ALTERAÇÃO: Processa as imagens para Base64 antes de salvar
+        # <-- ALTERADO: Usa o Base64 ao invés de salvar no disco local -->
         imagem_1 = processar_imagem_base64(request.files.get("imagem_1"))
         imagem_2 = processar_imagem_base64(request.files.get("imagem_2"))
         imagem_3 = processar_imagem_base64(request.files.get("imagem_3"))
@@ -1011,7 +1049,7 @@ def editar_ocorrencia(ocorrencia_id):
             if assinatura_saida_recebida:
                 ocorrencia.assinatura_saida = assinatura_saida_recebida
 
-            # ALTERAÇÃO: Processa a imagem base64 se ela for enviada
+            # <-- ALTERADO: Usa o Base64 na atualização de imagens -->
             nova_imagem_1 = processar_imagem_base64(request.files.get("imagem_1"))
             nova_imagem_2 = processar_imagem_base64(request.files.get("imagem_2"))
             nova_imagem_3 = processar_imagem_base64(request.files.get("imagem_3"))
@@ -1230,6 +1268,10 @@ def export_ocorrencias_excel():
         "Pendências",
         "Assinatura Saída",
         "Assinatura Entrada",
+        "Imagem 1",
+        "Imagem 2",
+        "Imagem 3",
+        "Imagem 4",
         "Status",
         "Criado por",
         "Criado em",
@@ -1265,6 +1307,10 @@ def export_ocorrencias_excel():
                 r.pendencias or "",
                 "SIM" if r.assinatura_saida else "NÃO",
                 "SIM" if r.assinatura_entrada else "NÃO",
+                "SIM" if r.imagem_1 else "",
+                "SIM" if r.imagem_2 else "",
+                "SIM" if r.imagem_3 else "",
+                "SIM" if r.imagem_4 else "",
                 r.status,
                 r.criado_por or "",
                 r.created_at.strftime("%d/%m/%Y %H:%M") if r.created_at else "",
@@ -1288,12 +1334,27 @@ def export_ocorrencias_excel():
     output.seek(0)
 
     nome_arquivo = f"livro_ocorrencias_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name=nome_arquivo,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+
+    # <-- ALTERADO: O Webview chama a tela "Salvar Como..." do próprio Windows -->
+    if len(webview.windows) > 0:
+        janela = webview.windows[0]
+        destino = janela.create_file_dialog(
+            webview.SAVE_DIALOG, 
+            save_filename=nome_arquivo, 
+            file_types=('Arquivos Excel (*.xlsx)', 'Todos os arquivos (*.*)')
+        )
+        if destino and len(destino) > 0:
+            with open(destino[0], 'wb') as f:
+                f.write(output.getvalue())
+            flash(f"Planilha Excel salva com sucesso!", "success")
+        return redirect(request.referrer or url_for('index'))
+    else:
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=nome_arquivo,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
 
 # =========================
@@ -1483,7 +1544,7 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
         ocorrencia.imagem_4,
     ]
 
-    # ALTERAÇÃO: Lê as imagens a partir do Base64
+    # <-- ALTERADO: O construtor do PDF agora pesquisa as fotos no Banco (Base64) em vez de C:\Uploads -->
     caminhos_validos = [img for img in imagens_registro if img and img.startswith("data:image")]
 
     if caminhos_validos:
@@ -1540,12 +1601,27 @@ def export_ocorrencia_individual_pdf(ocorrencia_id):
     output.seek(0)
 
     nome_arquivo = f"ocorrencia_{ocorrencia.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name=nome_arquivo,
-        mimetype="application/pdf",
-    )
+
+    # <-- ALTERADO: O Webview chama a tela "Salvar Como..." do próprio Windows -->
+    if len(webview.windows) > 0:
+        janela = webview.windows[0]
+        destino = janela.create_file_dialog(
+            webview.SAVE_DIALOG, 
+            save_filename=nome_arquivo, 
+            file_types=('Arquivos PDF (*.pdf)', 'Todos os arquivos (*.*)')
+        )
+        if destino and len(destino) > 0:
+            with open(destino[0], 'wb') as f:
+                f.write(output.getvalue())
+            flash(f"PDF Individual salvo com sucesso!", "success")
+        return redirect(request.referrer or url_for('index'))
+    else:
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=nome_arquivo,
+            mimetype="application/pdf",
+        )
 
 
 # =========================
@@ -1928,12 +2004,26 @@ def export_ocorrencias_pdf():
     output.seek(0)
     nome_arquivo = f"livro_ocorrencias_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
 
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name=nome_arquivo,
-        mimetype="application/pdf",
-    )
+    # <-- ALTERADO: O Webview chama a tela "Salvar Como..." do próprio Windows -->
+    if len(webview.windows) > 0:
+        janela = webview.windows[0]
+        destino = janela.create_file_dialog(
+            webview.SAVE_DIALOG, 
+            save_filename=nome_arquivo, 
+            file_types=('Arquivos PDF (*.pdf)', 'Todos os arquivos (*.*)')
+        )
+        if destino and len(destino) > 0:
+            with open(destino[0], 'wb') as f:
+                f.write(output.getvalue())
+            flash(f"PDF Geral salvo com sucesso!", "success")
+        return redirect(request.referrer or url_for('index'))
+    else:
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=nome_arquivo,
+            mimetype="application/pdf",
+        )
 
 
 # =========================
@@ -1960,9 +2050,12 @@ def criar_banco():
 
     return "Banco criado com sucesso. Login padrão: admin@dhl.com / 123456"
 
+
 # =========================
 # INICIALIZAÇÃO WEBVIEW
 # =========================
+
+# <-- ALTERADO: Iniciar o aplicativo Webview no lugar do servidor comum -->
 def start_flask():
     app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
 
