@@ -63,6 +63,7 @@ app = Flask(__name__,
             template_folder=resource_path('templates'),
             static_folder=resource_path('static'))
 app.config["SECRET_KEY"] = "dev-secret-change-me"
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 # =========================
 # CONFIGURAÇÃO ORACLE DB SEGURA (.ENV EMBUTIDO)
@@ -88,9 +89,10 @@ if getattr(sys, 'frozen', False):
 else:
     exe_dir = os.path.dirname(os.path.abspath(__file__))
 
-UPLOAD_FOLDER = os.path.join(exe_dir, "uploads")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+# <-- ALTERAÇÃO: Removido a criação física da pasta uploads já que usamos Base64 no banco -->
+# UPLOAD_FOLDER = os.path.join(exe_dir, "uploads")
+# os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
@@ -101,7 +103,7 @@ db = SQLAlchemy(app)
 # CONSTANTES / CONTROLE DE VERSÃO
 # =========================
 APP_NAME = "LIVRO_OCORRENCIAS"
-APP_VERSION = "1.0.1"  # <- Altere este número sempre que compilar um novo executável
+APP_VERSION = "1.0.2"  # <- Altere este número sempre que compilar um novo executável
 
 TURNOS_VALIDOS = {"TURNO A", "TURNO B", "TURNO C", "ADM"}
 TIPOS_VALIDOS = {
@@ -356,8 +358,12 @@ def salvar_imagem_upload(file_storage, prefixo="img"):
 
     ext = nome_original.rsplit(".", 1)[1].lower()
     nome_final = f"{prefixo}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.{ext}"
-    caminho = os.path.join(app.config["UPLOAD_FOLDER"], nome_final)
-    file_storage.save(caminho)
+    
+    # Adicionado fallback caso a função ainda seja usada
+    pasta_upload = app.config.get("UPLOAD_FOLDER", "")
+    if pasta_upload:
+        caminho = os.path.join(pasta_upload, nome_final)
+        file_storage.save(caminho)
     return nome_final
 
 
@@ -435,7 +441,7 @@ def format_datetime_local_input(value):
     return value.strftime("%Y-%m-%dT%H:%M")
 
 
-def pdf_safe(texto): 
+def pdf_safe(texto):
     if not texto: return "-"
     return escape(str(texto)).replace('\n', '<br/>')
 
@@ -883,7 +889,12 @@ def index():
 @app.route("/uploads/<path:filename>")
 @login_required
 def serve_upload(filename):
-    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+    # Rota mantida por segurança caso seja necessário acessar algo antigo, 
+    # mas o app usa a pasta app.config (se estiver definida)
+    pasta = app.config.get("UPLOAD_FOLDER")
+    if pasta and os.path.exists(pasta):
+        return send_from_directory(pasta, filename)
+    return "Pasta de uploads não configurada.", 404
 
 
 @app.route("/salvar-ocorrencia-turno", methods=["POST"])
@@ -2083,4 +2094,4 @@ if __name__ == "__main__":
     t.start()
 
     webview.create_window('Livro de Ocorrências DHL Security', 'http://127.0.0.1:5000', width=1280, height=850, resizable=True)
-    webview.start()
+    webview.start(private_mode=True, debug=True)

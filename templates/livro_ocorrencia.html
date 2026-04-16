@@ -180,7 +180,7 @@
     }
 
     .logo-topbar{
-      height:42px;
+      height:21px;
       width:auto;
       display:block;
       object-fit:contain;
@@ -735,7 +735,8 @@
     table{
       width:100%;
       border-collapse:collapse;
-      min-width:2300px;
+      /* ALTERADO: Largura reduzida para caber as 9 colunas e o modal perfeitamente */
+      min-width:1000px;
       background:#fff;
     }
 
@@ -743,7 +744,7 @@
       padding:10px 12px;
       border-bottom:1px solid #edf0f4;
       text-align:left;
-      vertical-align:top;
+      vertical-align:middle;
       font-size:13px;
     }
 
@@ -804,6 +805,31 @@
       padding:10px 14px;
       border-radius:999px;
       border:1px solid rgba(255,255,255,.35);
+    }
+
+    /* CSS ADICIONADO: Modal Nativo (sem conflitar com o seu layout) */
+    .custom-modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.6); z-index: 999999;
+      display: none; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .custom-modal-overlay.active { display: flex; }
+    
+    .custom-modal-box {
+      background: var(--bg); width: 100%; max-width: 900px;
+      max-height: 90vh; border-radius: var(--radius);
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3); text-align: left;
+    }
+    .custom-modal-header {
+      background: #fff; padding: 16px 24px; border-bottom: 1px solid var(--line);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .custom-modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+    .custom-modal-footer {
+      background: #fff; padding: 16px 24px; border-top: 1px solid var(--line);
+      display: flex; justify-content: flex-end;
     }
 
     @media (max-width:1100px){
@@ -897,7 +923,7 @@
   <main class="main">
     <header class="topbar">
       <div class="topbar-left">
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo DHL" class="logo-topbar">
+        <img src="{{ url_for('static', filename='DHL_logo_rgb.png') }}" alt="Logo DHL" class="logo-topbar">
         <div>
           <h1>Livro de Ocorrência - Passagem de Turno</h1>
           <p>Registro padronizado com visão gerencial e controle operacional</p>
@@ -1395,39 +1421,31 @@
                 <tr>
                   <th>ID</th>
                   <th>Data ocorrência</th>
-                  <th>Data/Hora registro</th>
                   <th>Site</th>
                   <th>Turno</th>
-                  <th>Setor</th>
-                  <th>Tipo</th>
                   <th>Prioridade</th>
                   <th>Status</th>
                   <th>Resp. saída</th>
                   <th>Resp. entrada</th>
-                  <th>Efetivo</th>
-                  <th>Descrição</th>
-                  <th>Ações tomadas</th>
-                  <th>Pendências</th>
-                  <th>Ass. saída</th>
-                  <th>Ass. entrada</th>
-                  <th>Imagens</th>
-                  <th>Criado por</th>
-                  <th>Criado em</th>
-                  <th>Atualizado em</th>
-                  <th>Ações</th>
+                  <th style="text-align: right;">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {% for r in ocorrencias %}
                   <tr class="{% if r.status == 'FINALIZADO' %}row-finalizado{% endif %}">
-                    <td>#{{ r.id }}</td>
+                    <td style="font-weight: bold; color: var(--dhl-red);">#{{ r.id }}</td>
                     <td>{{ r.data_ocorrencia or '-' }}</td>
-                    <td>{{ r.data_hora_registro or '-' }}</td>
                     <td>{{ r.site or '-' }}</td>
                     <td>{{ r.turno or '-' }}</td>
-                    <td>{{ r.setor or '-' }}</td>
-                    <td>{{ r.tipo_ocorrencia or '-' }}</td>
-                    <td>{{ r.prioridade or '-' }}</td>
+                    <td>
+                      {% if r.prioridade == 'CRITICA' %}
+                        <span class="badge dangerb">{{ r.prioridade }}</span>
+                      {% elif r.prioridade == 'ALTA' %}
+                        <span class="badge warnb">{{ r.prioridade }}</span>
+                      {% else %}
+                        <span class="badge mutedb">{{ r.prioridade or '-' }}</span>
+                      {% endif %}
+                    </td>
                     <td>
                       {% if r.status == 'FINALIZADO' %}
                         <span class="badge ok">{{ r.status }}</span>
@@ -1441,42 +1459,11 @@
                     </td>
                     <td>{{ r.responsavel_saida or '-' }}</td>
                     <td>{{ r.responsavel_entrada or '-' }}</td>
-                    <td>{{ r.efetivo or '-' }}</td>
-                    <td>{{ r.descricao or '-' }}</td>
-                    <td>{{ r.acoes_tomadas or '-' }}</td>
-                    <td>{{ r.pendencias or '-' }}</td>
 
                     <td>
-                      {% if r.assinatura_saida %}
-                        <img src="{{ r.assinatura_saida }}" alt="Assinatura saída" style="max-width:140px; max-height:50px; display:block;">
-                      {% else %}
-                        -
-                      {% endif %}
-                    </td>
+                      <div class="table-actions" style="justify-content: flex-end;">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="abrirModalOc('{{ r.id }}')">Ver Mais</button>
 
-                    <td>
-                      {% if r.assinatura_entrada %}
-                        <img src="{{ r.assinatura_entrada }}" alt="Assinatura entrada" style="max-width:140px; max-height:50px; display:block;">
-                      {% else %}
-                        Pendente
-                      {% endif %}
-                    </td>
-
-                    <td>
-                      {% set ns = namespace(total=0) %}
-                      {% if r.imagem_1 %}{% set ns.total = ns.total + 1 %}{% endif %}
-                      {% if r.imagem_2 %}{% set ns.total = ns.total + 1 %}{% endif %}
-                      {% if r.imagem_3 %}{% set ns.total = ns.total + 1 %}{% endif %}
-                      {% if r.imagem_4 %}{% set ns.total = ns.total + 1 %}{% endif %}
-                      {{ ns.total }}
-                    </td>
-
-                    <td>{{ r.criado_por or '-' }}</td>
-                    <td>{{ r.criado_em or '-' }}</td>
-                    <td>{{ r.atualizado_em or '-' }}</td>
-
-                    <td>
-                      <div class="table-actions">
                         <a href="{{ url_for('export_ocorrencia_individual_pdf', ocorrencia_id=r.id) }}" class="btn btn-dark btn-sm">PDF</a>
                         
                         {% if not r.assinatura_entrada and r.responsavel_entrada == session.get('username') %}
@@ -1494,9 +1481,94 @@
                       </div>
                     </td>
                   </tr>
-                {% else %}
+
+                  <div class="custom-modal-overlay" id="modal-oc-{{ r.id }}">
+                    <div class="custom-modal-box">
+                      <div class="custom-modal-header">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                          <h3 style="margin:0; color:var(--dhl-red); font-size:20px;">Detalhes da Ocorrência #{{ r.id }}</h3>
+                          <span class="badge {% if r.status == 'FINALIZADO' %}ok{% elif r.status == 'EM ABERTO' %}dangerb{% else %}warnb{% endif %}">{{ r.status }}</span>
+                        </div>
+                        <button type="button" onclick="fecharModalOc('{{ r.id }}')" style="background:none; border:none; font-size:26px; cursor:pointer; color:#666;">&times;</button>
+                      </div>
+
+                      <div class="custom-modal-body">
+                        <div class="card result-panel" style="padding:16px; margin-bottom:16px;">
+                          <div class="info-grid" style="margin-top:0;">
+                            <div class="info-box"><strong>Data/Hora Registro:</strong>{{ r.data_hora_registro or '-' }}</div>
+                            <div class="info-box"><strong>Site:</strong>{{ r.site or '-' }}</div>
+                            <div class="info-box"><strong>Turno:</strong>{{ r.turno or '-' }}</div>
+                            <div class="info-box"><strong>Setor:</strong>{{ r.setor or '-' }}</div>
+                            <div class="info-box"><strong>Tipo:</strong>{{ r.tipo_ocorrencia or '-' }}</div>
+                            <div class="info-box"><strong>Prioridade:</strong>{{ r.prioridade or '-' }}</div>
+                            <div class="info-box"><strong>Criado por:</strong>{{ r.criado_por or '-' }} ({{ r.criado_em or '-' }})</div>
+                            <div class="info-box"><strong>Atualizado em:</strong>{{ r.atualizado_em or '-' }}</div>
+                          </div>
+
+                          <div style="margin-top:16px;"><strong>Efetivo:</strong></div>
+                          <div style="white-space: pre-wrap;">{{ r.efetivo or '-' }}</div>
+
+                          <div style="margin-top:12px;"><strong>Descrição:</strong></div>
+                          <div style="white-space: pre-wrap;">{{ r.descricao or '-' }}</div>
+
+                          <div style="margin-top:12px;"><strong>Ações tomadas:</strong></div>
+                          <div style="white-space: pre-wrap;">{{ r.acoes_tomadas or '-' }}</div>
+
+                          <div style="margin-top:12px;"><strong>Pendências:</strong></div>
+                          <div style="white-space: pre-wrap;">{{ r.pendencias or '-' }}</div>
+                        </div>
+
+                        <div class="card result-panel" style="padding:16px; margin-bottom:16px;">
+                          <div class="assinatura-box" style="margin-top:0; border-top:none; padding-top:0;">
+                            <div style="margin-bottom:10px;"><strong>Assinaturas:</strong></div>
+                            <div class="signature-grid">
+                              <div class="signature-card">
+                                <h4>Responsável que está saindo</h4>
+                                {% if r.assinatura_saida %}
+                                  <div class="signature-preview"><img src="{{ r.assinatura_saida }}" style="max-height:80px; display:block; margin:0 auto;"></div>
+                                {% else %}-{% endif %}
+                                <div class="assinatura-line"></div>
+                                <div class="assinatura-label">{{ r.responsavel_saida or '-' }}</div>
+                              </div>
+                              <div class="signature-card">
+                                <h4>Responsável que está assumindo</h4>
+                                {% if r.assinatura_entrada %}
+                                  <div class="signature-preview"><img src="{{ r.assinatura_entrada }}" style="max-height:80px; display:block; margin:0 auto;"></div>
+                                {% else %}
+                                  <div style="color:var(--dhl-red); font-weight: bold; margin: 20px 0; text-align:center;">Pendente</div>
+                                {% endif %}
+                                <div class="assinatura-line"></div>
+                                <div class="assinatura-label">{{ r.responsavel_entrada or '-' }}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="card result-panel" style="padding:16px;">
+                          <div class="assinatura-box" style="margin-top:0; border-top:none; padding-top:0;">
+                            <div style="margin-bottom:10px;"><strong>Imagens anexadas:</strong></div>
+                            <div class="preview-grid">
+                              {% if r.imagem_1 %}<div class="preview-item"><img src="{{ r.imagem_1 }}"></div>{% endif %}
+                              {% if r.imagem_2 %}<div class="preview-item"><img src="{{ r.imagem_2 }}"></div>{% endif %}
+                              {% if r.imagem_3 %}<div class="preview-item"><img src="{{ r.imagem_3 }}"></div>{% endif %}
+                              {% if r.imagem_4 %}<div class="preview-item"><img src="{{ r.imagem_4 }}"></div>{% endif %}
+                            </div>
+                            {% if not r.imagem_1 and not r.imagem_2 and not r.imagem_3 and not r.imagem_4 %}
+                              <div style="color:var(--muted); font-size:13px;">Sem evidências fotográficas.</div>
+                            {% endif %}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="custom-modal-footer">
+                        <button class="btn btn-dark" onclick="fecharModalOc('{{ r.id }}')">Fechar Detalhes</button>
+                      </div>
+
+                    </div>
+                  </div>
+                  {% else %}
                   <tr>
-                    <td colspan="22">Nenhuma ocorrência encontrada.</td>
+                    <td colspan="9" style="text-align: center; padding: 20px;">Nenhuma ocorrência encontrada.</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -1616,41 +1688,15 @@
     }
     return true;
   }
-</script>
-<style>
-        #loading-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7); z-index: 99999;
-            display: none; align-items: center; justify-content: center;
-            flex-direction: column; color: white;
-        }
-    </style>
-    <div id="loading-overlay">
-        <div class="spinner-border text-warning" role="status" style="width: 4rem; height: 4rem;"></div>
-        <h4 class="mt-3 fw-bold">Processando, aguarde...</h4>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const overlay = document.getElementById('loading-overlay');
-            
-            // 1. Trava a tela ao enviar qualquer formulário (Login, Salvar Ocorrência, etc)
-            document.querySelectorAll('form').forEach(form => {
-                form.addEventListener('submit', function() {
-                    overlay.style.display = 'flex';
-                });
-            });
 
-            // 2. Trava a tela ao clicar nos botões de Exportar (Excel / PDF)
-            const botoesExportar = document.querySelectorAll('a.btn-success, a.btn-danger, a.btn-outline-danger');
-            botoesExportar.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    overlay.style.display = 'flex';
-                    // Como download não recarrega a página, destravamos a tela após 3,5 segundos
-                    setTimeout(() => { overlay.style.display = 'none'; }, 3500);
-                });
-            });
-        });
-    </script>
+  // SCRIPT ADICIONADO PARA O MODAL FUNCIONAR
+  function abrirModalOc(id) {
+    document.getElementById('modal-oc-' + id).classList.add('active');
+  }
+  function fecharModalOc(id) {
+    document.getElementById('modal-oc-' + id).classList.remove('active');
+  }
+</script>
 
 </body>
 </html>
